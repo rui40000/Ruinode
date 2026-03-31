@@ -8,6 +8,11 @@ import base64
 import time
 from PIL import Image
 
+try:
+    import oss2  # type: ignore
+except Exception:
+    oss2 = None
+
 class XmilesNanobananaNode:
     @classmethod
     def INPUT_TYPES(cls):
@@ -21,6 +26,12 @@ class XmilesNanobananaNode:
                 "images": ("IMAGE",),
                 "proxy_url": ("STRING", {"default": "", "multiline": False}),
                 "verbose": ("BOOLEAN", {"default": True}),
+                "use_oss": ("BOOLEAN", {"default": False}),
+                "oss_access_key": ("STRING", {"default": "", "multiline": False}),
+                "oss_secret_key": ("STRING", {"default": "", "multiline": False}),
+                "oss_endpoint": ("STRING", {"default": "", "multiline": False, "placeholder": "oss-cn-shanghai.aliyuncs.com"}),
+                "oss_bucket_name": ("STRING", {"default": "", "multiline": False}),
+                "oss_url_prefix": ("STRING", {"default": "", "multiline": False, "placeholder": "https://genai.holopix.cn"}),
             }
         }
 
@@ -48,13 +59,36 @@ class XmilesNanobananaNode:
         t = torch.from_numpy(np_img).unsqueeze(0)
         return t
 
+    def _upload_to_oss_and_get_url(self, tensor, ak, sk, endpoint, bucket_name, url_prefix, verbose=False):
+        if oss2 is None:
+            raise RuntimeError("oss2 is not installed. Please `pip install oss2` and try again.")
+        arr = tensor.cpu().numpy()
+        arr = np.clip(arr, 0, 1)
+        img = Image.fromarray((arr * 255).astype(np.uint8), 'RGB')
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        data = buf.getvalue()
+        key = f"comfyui/{uuid.uuid4().hex}.png"
+        if verbose:
+            print("Xmiles-nanobanana:oss_put_begin", {"key": key, "size": len(data)}, flush=True)
+        auth = oss2.Auth(ak, sk)
+        bucket = oss2.Bucket(auth, endpoint, bucket_name)
+        result = bucket.put_object(key, data)
+        if result.status not in (200, 204):
+            raise RuntimeError(f"OSS put_object failed, status={result.status}")
+        url = url_prefix.rstrip("/") + "/" + key
+        if verbose:
+            print("Xmiles-nanobanana:oss_put_done", {"url": url}, flush=True)
+        return url
+
     def _download_image_tensor(self, url, proxies=None):
         r = requests.get(url, proxies=proxies, timeout=60)
         r.raise_for_status()
         img = Image.open(io.BytesIO(r.content))
         return self._pil_to_tensor(img)
 
-    def generate(self, text, resolution, aspect_ratio, images=None, proxy_url="", verbose=True):
+    def generate(self, text, resolution, aspect_ratio, images=None, proxy_url="", verbose=True, use_oss=False,
+                 oss_access_key="", oss_secret_key="", oss_endpoint="", oss_bucket_name="", oss_url_prefix=""):
         t0 = time.perf_counter()
         logs = []
         if verbose: 
@@ -92,8 +126,16 @@ class XmilesNanobananaNode:
                 print("Xmiles-nanobanana:image_count", len(tensors), flush=True)
             logs.append(f"image_count={len(tensors)}")
             for t in tensors:
-                b64 = self._tensor_to_png_base64(t)
-                image_parts.append({"inlineData": {"data": "data:image/png;base64," + b64, "mimeType": "image/png"}})
+                if use_oss:
+                    if not (oss_access_key and oss_secret_key and oss_endpoint and oss_bucket_name and oss_url_prefix):
+                        raise RuntimeError("use_oss=True but OSS credentials/config are missing.")
+                    url_uploaded = self._upload_to_oss_and_get_url(
+                        t, oss_access_key, oss_secret_key, oss_endpoint, oss_bucket_name, oss_url_prefix, verbose=verbose
+                    )
+                    image_parts.append({"inlineData": {"data": url_uploaded, "mimeType": "image/png"}})
+                else:
+                    b64 = self._tensor_to_png_base64(t)
+                    image_parts.append({"inlineData": {"data": "data:image/png;base64," + b64, "mimeType": "image/png"}})
 
         for p in image_parts:
             parts.append(p)
