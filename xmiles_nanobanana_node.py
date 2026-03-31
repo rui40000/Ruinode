@@ -59,7 +59,7 @@ class XmilesNanobananaNode:
         t = torch.from_numpy(np_img).unsqueeze(0)
         return t
 
-    def _upload_to_oss_and_get_url(self, tensor, ak, sk, endpoint, bucket_name, url_prefix, verbose=False):
+    def _upload_to_oss_and_get_url(self, tensor, ak, sk, endpoint, bucket_name, url_prefix, verbose=False, proxy_url=""):
         if oss2 is None:
             raise RuntimeError("oss2 is not installed. Please `pip install oss2` and try again.")
         arr = tensor.cpu().numpy()
@@ -72,10 +72,45 @@ class XmilesNanobananaNode:
         if verbose:
             print("Xmiles-nanobanana:oss_put_begin", {"key": key, "size": len(data)}, flush=True)
         auth = oss2.Auth(ak, sk)
-        bucket = oss2.Bucket(auth, endpoint, bucket_name)
-        result = bucket.put_object(key, data)
-        if result.status not in (200, 204):
-            raise RuntimeError(f"OSS put_object failed, status={result.status}")
+        endp = endpoint if endpoint.startswith("http") else ("https://" + endpoint) if endpoint else ""
+        old_http = None
+        old_https = None
+        try:
+            if proxy_url and proxy_url.strip():
+                old_http = os.environ.get("HTTP_PROXY")
+                old_https = os.environ.get("HTTPS_PROXY")
+                os.environ["HTTP_PROXY"] = proxy_url
+                os.environ["HTTPS_PROXY"] = proxy_url
+            bucket = oss2.Bucket(auth, endp, bucket_name)
+            result = bucket.put_object(key, data)
+            if result.status not in (200, 204):
+                raise RuntimeError(f"OSS put_object failed, status={result.status}")
+        except Exception as e:
+            if verbose:
+                print("Xmiles-nanobanana:oss_put_error_primary", str(e), flush=True)
+            if url_prefix:
+                cname_ep = url_prefix if url_prefix.startswith("http") else ("https://" + url_prefix)
+                try:
+                    bucket = oss2.Bucket(auth, cname_ep, bucket_name, is_cname=True)
+                    result = bucket.put_object(key, data)
+                    if result.status not in (200, 204):
+                        raise RuntimeError(f"CNAME put_object failed, status={result.status}")
+                except Exception as e2:
+                    if verbose:
+                        print("Xmiles-nanobanana:oss_put_error_cname", str(e2), flush=True)
+                    raise
+            else:
+                raise
+        finally:
+            if proxy_url and proxy_url.strip():
+                if old_http is None:
+                    os.environ.pop("HTTP_PROXY", None)
+                else:
+                    os.environ["HTTP_PROXY"] = old_http
+                if old_https is None:
+                    os.environ.pop("HTTPS_PROXY", None)
+                else:
+                    os.environ["HTTPS_PROXY"] = old_https
         url = url_prefix.rstrip("/") + "/" + key
         if verbose:
             print("Xmiles-nanobanana:oss_put_done", {"url": url}, flush=True)
@@ -130,7 +165,7 @@ class XmilesNanobananaNode:
                     if not (oss_access_key and oss_secret_key and oss_endpoint and oss_bucket_name and oss_url_prefix):
                         raise RuntimeError("use_oss=True but OSS credentials/config are missing.")
                     url_uploaded = self._upload_to_oss_and_get_url(
-                        t, oss_access_key, oss_secret_key, oss_endpoint, oss_bucket_name, oss_url_prefix, verbose=verbose
+                        t, oss_access_key, oss_secret_key, oss_endpoint, oss_bucket_name, oss_url_prefix, verbose=verbose, proxy_url=proxy_url
                     )
                     image_parts.append({"inlineData": {"data": url_uploaded, "mimeType": "image/png"}})
                 else:
