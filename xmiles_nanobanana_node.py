@@ -181,6 +181,11 @@ class XmilesNanobananaNode:
             print("Xmiles-nanobanana:parts_ready_ms", int((t1 - t0) * 1000), flush=True)
         logs.append(f"parts_ready_ms={(t1-t0)*1000:.2f}")
 
+        unique_id = str(uuid.uuid4().int)[:19]
+        if verbose:
+            print("Xmiles-nanobanana:unique_id", unique_id, flush=True)
+        logs.append(f"unique_id={unique_id}")
+
         body_obj = {
             "contents": [
                 {
@@ -224,7 +229,7 @@ class XmilesNanobananaNode:
                 "moduleName": "全能编辑 V2",
                 "resolution": "",
                 "taskType": "ZENMUX",
-                "uniqueId": str(uuid.uuid4().int)[:19],
+                "uniqueId": unique_id,
                 "workflowName": ""
             },
             "imgIdList": [],
@@ -247,7 +252,20 @@ class XmilesNanobananaNode:
             logs.append(f"post_elapsed_ms={(t4-t3)*1000:.2f}")
             status = data.get("status")
             gen_status = data.get("generateStatus")
-            logs = {"status": status, "generateStatus": gen_status, "clientId": data.get("clientId"), "timestamp": data.get("timestamp"), "raw": data}
+            # 补充本地发送的 clientId / uniqueId，便于轮询节点使用
+            logs = {
+                "status": status,
+                "generateStatus": gen_status,
+                "clientId": data.get("clientId"),
+                "timestamp": data.get("timestamp"),
+                "clientId_sent": client_id,
+                "uniqueId_sent": unique_id,
+                "raw": data
+            }
+            # 队列受理态识别（部分服务返回 code/success）
+            if status is None and gen_status is None and isinstance(data, dict) and data.get("success") is True:
+                if verbose:
+                    print("Xmiles-nanobanana:queued_accept", {"clientId": client_id, "uniqueId": unique_id}, flush=True)
             tensors = []
             if status == 0 and gen_status == 1:
                 items = data.get("data") or []
