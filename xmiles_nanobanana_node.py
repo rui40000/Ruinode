@@ -27,6 +27,7 @@ class XmilesNanobananaNode:
                 "proxy_url": ("STRING", {"default": "", "multiline": False}),
                 "verbose": ("BOOLEAN", {"default": True}),
                 "use_oss": ("BOOLEAN", {"default": False}),
+                "on_queued": (["passthrough", "empty"], {"default": "passthrough"}),
                 "oss_access_key": ("STRING", {"default": "", "multiline": False}),
                 "oss_secret_key": ("STRING", {"default": "", "multiline": False}),
                 "oss_endpoint": ("STRING", {"default": "", "multiline": False, "placeholder": "oss-cn-shanghai.aliyuncs.com"}),
@@ -122,7 +123,7 @@ class XmilesNanobananaNode:
         img = Image.open(io.BytesIO(r.content))
         return self._pil_to_tensor(img)
 
-    def generate(self, text, resolution, aspect_ratio, images=None, proxy_url="", verbose=True, use_oss=False,
+    def generate(self, text, resolution, aspect_ratio, images=None, proxy_url="", verbose=True, use_oss=False, on_queued="passthrough",
                  oss_access_key="", oss_secret_key="", oss_endpoint="", oss_bucket_name="", oss_url_prefix=""):
         t0 = time.perf_counter()
         logs = []
@@ -246,7 +247,7 @@ class XmilesNanobananaNode:
             logs.append(f"post_elapsed_ms={(t4-t3)*1000:.2f}")
             status = data.get("status")
             gen_status = data.get("generateStatus")
-            logs = {"status": status, "generateStatus": gen_status, "clientId": data.get("clientId"), "timestamp": data.get("timestamp")}
+            logs = {"status": status, "generateStatus": gen_status, "clientId": data.get("clientId"), "timestamp": data.get("timestamp"), "raw": data}
             tensors = []
             if status == 0 and gen_status == 1:
                 items = data.get("data") or []
@@ -267,7 +268,14 @@ class XmilesNanobananaNode:
             else:
                 if verbose:
                     print("Xmiles-nanobanana:task_failed", {"status": status, "generateStatus": gen_status}, flush=True)
-                return ([], json.dumps(data, ensure_ascii=False))
+                if on_queued == "passthrough" and images is not None:
+                    passthrough = []
+                    if isinstance(images, list):
+                        passthrough = [img[0] for img in images]
+                    else:
+                        passthrough = [images[0]]
+                    return (passthrough, json.dumps(logs, ensure_ascii=False))
+                return ([], json.dumps(logs, ensure_ascii=False))
         except Exception as e:
             if verbose:
                 print("Xmiles-nanobanana:error", str(e), flush=True)
@@ -335,12 +343,92 @@ class XmilesNanobananaResultParser:
                 print("Xmiles-nanobanana:parse_error", str(e), flush=True)
             return ([], str(e))
 
+class XmilesNanobananaPoller:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "query_url": ("STRING", {"default": "", "multiline": False}),
+                "method": (["GET", "POST"], {"default": "GET"}),
+                "client_id": ("STRING", {"default": "", "multiline": False}),
+                "unique_id": ("STRING", {"default": "", "multiline": False}),
+                "poll_interval_ms": ("INT", {"default": 2000, "min": 200, "max": 60000, "step": 100}),
+                "max_wait_ms": ("INT", {"default": 60000, "min": 2000, "max": 600000, "step": 1000}),
+            },
+            "optional": {
+                "payload_template": ("STRING", {"multiline": True, "default": ""}),
+                "proxy_url": ("STRING", {"default": "", "multiline": False}),
+                "verbose": ("BOOLEAN", {"default": True}),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("images", "log")
+    OUTPUT_IS_LIST = (True, False)
+    FUNCTION = "poll"
+    CATEGORY = "Rui-Node🐶/AI模型🤖"
+
+    def _download_image_tensor(self, url, proxies=None):
+        r = requests.get(url, proxies=proxies, timeout=60)
+        r.raise_for_status()
+        img = Image.open(io.BytesIO(r.content))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        np_img = np.array(img).astype(np.float32) / 255.0
+        return torch.from_numpy(np_img).unsqueeze(0)
+
+    def poll(self, query_url, method, client_id, unique_id, poll_interval_ms, max_wait_ms, payload_template="", proxy_url="", verbose=True):
+        t_start = time.perf_counter()
+        proxies = None
+        if proxy_url and proxy_url.strip():
+            proxies = {"http": proxy_url, "https": proxy_url}
+        last_obj = None
+        while (time.perf_counter() - t_start) * 1000 < max_wait_ms:
+            try:
+                body = None
+                headers = {"Content-Type": "application/json"}
+                if payload_template and payload_template.strip():
+                    body_str = payload_template.replace("{clientId}", client_id).replace("{uniqueId}", unique_id)
+                    try:
+                        body = json.loads(body_str)
+                    except:
+                        body = body_str
+                if verbose:
+                    print("Xmiles-nanobanana:poll_tick", {"url": query_url}, flush=True)
+                if method == "POST":
+                    r = requests.post(query_url, headers=headers, json=body if isinstance(body, dict) else None, data=None if isinstance(body, dict) else body, proxies=proxies, timeout=30)
+                else:
+                    params = {"clientId": client_id, "uniqueId": unique_id}
+                    r = requests.get(query_url, headers=headers, params=params, proxies=proxies, timeout=30)
+                r.raise_for_status()
+                obj = r.json()
+                last_obj = obj
+                status = obj.get("status")
+                gen_status = obj.get("generateStatus")
+                if verbose:
+                    print("Xmiles-nanobanana:poll_status", {"status": status, "generateStatus": gen_status}, flush=True)
+                if status == 0 and gen_status == 1:
+                    tensors = []
+                    items = obj.get("data") or []
+                    for item in items:
+                        url_item = item.get("url")
+                        if url_item:
+                            tensors.append(self._download_image_tensor(url_item, proxies=proxies))
+                    return (tensors, json.dumps(obj, ensure_ascii=False))
+            except Exception as e:
+                if verbose:
+                    print("Xmiles-nanobanana:poll_error", str(e), flush=True)
+            time.sleep(poll_interval_ms / 1000.0)
+        return ([], json.dumps(last_obj if last_obj is not None else {"error": "timeout"}, ensure_ascii=False))
+
 NODE_CLASS_MAPPINGS = {
     "XmilesNanobanana": XmilesNanobananaNode,
     "XmilesNanobananaResultParser": XmilesNanobananaResultParser,
+    "XmilesNanobananaPoller": XmilesNanobananaPoller,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "XmilesNanobanana": "Xmiles-nanobanana",
     "XmilesNanobananaResultParser": "Xmiles-nanobanana 结果解析",
+    "XmilesNanobananaPoller": "Xmiles-nanobanana 轮询查询",
 }
