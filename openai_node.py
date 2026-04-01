@@ -19,18 +19,33 @@ os.environ['http_proxy'] = ''
 os.environ['https_proxy'] = ''
 
 
-def _fix_url(url: str) -> str:
+def _build_url(protocol: str, api_url: str) -> str:
     """
-    修复 ComfyUI 前端吞掉 URL 中 '//' 的问题。
-    例如：
-      'https:api.openai.com/v1/...'  -> 'https://api.openai.com/v1/...'
-      'https:'                        -> 原样返回（后续会报更清晰的错误）
-      'https://api.openai.com/v1/...' -> 不变
+    将协议和地址拼接为完整 URL。
+    兼容多种用户输入格式：
+      - 'api.openai.com/v1/chat/completions'         （标准，无协议前缀）
+      - 'https://api.openai.com/v1/chat/completions'  （用户手动写了完整 URL）
+      - 'https:api.openai.com/...'                     （被 ComfyUI 吞掉了 //）
+      - 'http://127.0.0.1:5000/v1/chat/completions'   （本地服务）
     """
-    url = url.strip()
-    # 匹配 http: 或 https: 后面紧跟的不是 // 的情况
-    fixed = re.sub(r'^(https?:)(?!//)', r'\1//', url)
-    return fixed
+    url = api_url.strip()
+
+    # 如果用户手动输入了完整 URL（含协议），直接修复并使用
+    if re.match(r'^https?://.+', url):
+        return url
+
+    # 去掉可能残留的被截断的协议前缀，如 "https:" "http:" "https://" "http://"
+    url = re.sub(r'^https?:/*', '', url)
+
+    # 去掉首尾多余的斜杠
+    url = url.strip('/')
+
+    if not url:
+        # 全部被吞了，回退到 OpenAI 默认地址
+        url = 'api.openai.com/v1/chat/completions'
+
+    return f"{protocol}{url}"
+
 
 class OpenAINode:
     """
@@ -38,14 +53,18 @@ class OpenAINode:
     支持连接 OpenAI 及其兼容 API（如 DeepSeek, Moonshot 等），
     支持文本生成和多模态图像理解。
     """
-    
+
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
+                "protocol": (["https://", "http://"], {
+                    "default": "https://"
+                }),
                 "api_url": ("STRING", {
-                    "default": "https://api.openai.com/v1/chat/completions",
-                    "multiline": False
+                    "default": "api.openai.com/v1/chat/completions",
+                    "multiline": False,
+                    "placeholder": "api.openai.com/v1/chat/completions"
                 }),
                 "api_key": ("STRING", {
                     "default": "",
@@ -126,6 +145,7 @@ class OpenAINode:
 
     def generate_content(
         self,
+        protocol,
         api_url,
         api_key,
         model,
@@ -150,8 +170,9 @@ class OpenAINode:
         - 无图像时：使用纯文本格式发送请求，实现普通对话
         """
 
-        # ---- 修复 URL：ComfyUI 前端可能吞掉 '//' ----
-        api_url = _fix_url(api_url)
+        # ---- 拼接完整 URL ----
+        full_url = _build_url(protocol, api_url)
+        print(f"[Rui-Node🐶 OpenAI] 请求地址: {full_url}")
 
         all_images = [
             img for img in [
@@ -232,7 +253,7 @@ class OpenAINode:
             }
 
         try:
-            response = requests.post(api_url, headers=headers, json=payload, proxies=proxies, timeout=60)
+            response = requests.post(full_url, headers=headers, json=payload, proxies=proxies, timeout=60)
             response.raise_for_status()
             result = response.json()
 
