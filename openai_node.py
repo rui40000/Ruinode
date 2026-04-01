@@ -7,85 +7,104 @@ import os
 import re
 from PIL import Image
 
-# 快速解决方案：清除可能导致连接错误的代理环境变量
-# Fast solution: Clear proxy environment variables that might cause connection errors
-# 许多用户在使用 requests 库连接 OpenAI API 时会遇到 ProxyError
-# 这是因为 Python 环境可能读取了不正确的系统代理设置
-# Many users encounter ProxyError when connecting to OpenAI API with requests
-# This is because the Python environment might read incorrect system proxy settings
-os.environ['HTTP_PROXY'] = ''
-os.environ['HTTPS_PROXY'] = ''
-os.environ['http_proxy'] = ''
-os.environ['https_proxy'] = ''
 
-
-def _build_url(protocol: str, api_url: str) -> str:
+def _clear_proxy_env():
     """
-    将协议和地址拼接为完整 URL。
-    兼容多种用户输入格式：
-      - 'api.openai.com/v1/chat/completions'         （标准，无协议前缀）
-      - 'https://api.openai.com/v1/chat/completions'  （用户手动写了完整 URL）
-      - 'https:api.openai.com/...'                     （被 ComfyUI 吞掉了 //）
-      - 'http://127.0.0.1:5000/v1/chat/completions'   （本地服务）
+    清除可能导致 requests 连接错误的代理环境变量。
+    仅在本模块加载时执行一次。
     """
-    url = api_url.strip()
+    for key in ('HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy'):
+        os.environ.pop(key, None)
 
-    # 如果用户手动输入了完整 URL（含协议），直接修复并使用
-    if re.match(r'^https?://.+', url):
-        return url
+_clear_proxy_env()
 
-    # 去掉可能残留的被截断的协议前缀，如 "https:" "http:" "https://" "http://"
-    url = re.sub(r'^https?:/*', '', url)
 
-    # 去掉首尾多余的斜杠
-    url = url.strip('/')
+def _sanitize_url(raw: str) -> str:
+    """
+    清理用户输入的 URL 片段：
+    去除被 ComfyUI 前端残留的协议碎片、多余斜杠等，只保留 host/path 部分。
+    """
+    s = raw.strip()
+    # 移除各种可能的协议残留:  "https:" / "http:" / "https://" / "http://"
+    s = re.sub(r'^https?\s*:\s*/*/?\s*', '', s, flags=re.IGNORECASE)
+    s = s.strip('/')
+    return s
 
-    if not url:
-        # 全部被吞了，回退到 OpenAI 默认地址
-        url = 'api.openai.com/v1/chat/completions'
 
-    return f"{protocol}{url}"
+def _build_full_url(protocol: str, api_url: str) -> str:
+    """
+    用下拉框的协议名和文本框的地址拼出完整 URL。
+    protocol 只会是 "https" 或 "http"（不含冒号和斜杠）。
+    """
+    host_path = _sanitize_url(api_url)
+    if not host_path:
+        host_path = 'api.openai.com/v1/chat/completions'
+    # 唯一拼接 :// 的地方——纯 Python 字符串，不经过前端
+    return protocol + '://' + host_path
+
+
+def _build_proxy_url(raw_proxy: str) -> str:
+    """
+    用户可能输入 '127.0.0.1:7890' 或 'http://127.0.0.1:7890'，
+    统一处理成带协议前缀的地址。
+    """
+    s = raw_proxy.strip()
+    if not s:
+        return ''
+    # 已经有完整协议
+    if re.match(r'^https?://', s, flags=re.IGNORECASE):
+        return s
+    # 移除残留碎片
+    s = re.sub(r'^https?\s*:\s*/*/?\s*', '', s, flags=re.IGNORECASE)
+    s = s.strip('/')
+    if not s:
+        return ''
+    return 'http://' + s
 
 
 class OpenAINode:
     """
-    OpenAI API 节点：
-    支持连接 OpenAI 及其兼容 API（如 DeepSeek, Moonshot 等），
-    支持文本生成和多模态图像理解。
+    OpenAI API 连接节点
+    ==================
+    支持 OpenAI 及兼容协议的 API（DeepSeek、Moonshot、本地 Ollama 等）。
+    - 纯文本模式：仅填写 user_prompt，进行对话生成
+    - 多模态模式：连接 image_1~6，进行图像理解
     """
 
+    # ────────── 输入定义 ──────────
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "protocol": (["https://", "http://"], {
-                    "default": "https://"
+                # 下拉框只含纯英文单词，不含 :// ，杜绝被前端吞掉
+                "protocol": (["https", "http"], {
+                    "default": "https"
                 }),
+                # 默认值不含任何协议前缀，杜绝被前端吞掉
                 "api_url": ("STRING", {
                     "default": "api.openai.com/v1/chat/completions",
                     "multiline": False,
-                    "placeholder": "api.openai.com/v1/chat/completions"
                 }),
                 "api_key": ("STRING", {
                     "default": "",
-                    "multiline": False
+                    "multiline": False,
                 }),
                 "model": ("STRING", {
                     "default": "gpt-4o",
-                    "multiline": False
+                    "multiline": False,
                 }),
                 "system_prompt": ("STRING", {
                     "default": "You are a helpful assistant.",
-                    "multiline": True
+                    "multiline": True,
                 }),
                 "user_prompt": ("STRING", {
                     "default": "",
-                    "multiline": True
+                    "multiline": True,
                 }),
                 "seed": ("INT", {
                     "default": 0,
                     "min": 0,
-                    "max": 0xffffffffffffffff
+                    "max": 0xffffffffffffffff,
                 }),
             },
             "optional": {
@@ -99,28 +118,28 @@ class OpenAINode:
                     "default": 0.3,
                     "min": 0.0,
                     "max": 2.0,
-                    "step": 0.1
+                    "step": 0.1,
                 }),
                 "max_tokens": ("INT", {
                     "default": 500,
                     "min": 1,
-                    "max": 8192
+                    "max": 8192,
                 }),
                 "detail": (["low", "high", "auto"], {
-                    "default": "auto"
+                    "default": "auto",
                 }),
                 "image_max_size": ("INT", {
                     "default": 1024,
                     "min": 256,
                     "max": 4096,
-                    "step": 64
+                    "step": 64,
                 }),
+                # 代理地址也不带协议前缀，只填 IP:端口 即可
                 "proxy_url": ("STRING", {
                     "default": "",
                     "multiline": False,
-                    "placeholder": "e.g., http://127.0.0.1:7890"
                 }),
-            }
+            },
         }
 
     RETURN_TYPES = ("STRING",)
@@ -128,21 +147,22 @@ class OpenAINode:
     FUNCTION = "generate_content"
     CATEGORY = "Rui-Node🐶/AI模型🤖"
 
-    def _encode_image_tensor(self, img_tensor, image_max_size):
+    # ────────── 图像编码 ──────────
+    @staticmethod
+    def _encode_image(img_tensor, max_size):
+        """将单张图像张量 [H,W,C] 编码为 base64 JPEG 字符串。"""
         img_np = img_tensor.cpu().numpy()
         img_np = np.clip(img_np, 0, 1)
-        img_pil = Image.fromarray((img_np * 255).astype(np.uint8), 'RGB')
-        width, height = img_pil.size
-        if max(width, height) > image_max_size:
-            ratio = image_max_size / max(width, height)
-            img_pil = img_pil.resize(
-                (max(1, int(width * ratio)), max(1, int(height * ratio))),
-                Image.LANCZOS
-            )
-        buffered = io.BytesIO()
-        img_pil.save(buffered, format="JPEG", quality=85)
-        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+        pil = Image.fromarray((img_np * 255).astype(np.uint8), 'RGB')
+        w, h = pil.size
+        if max(w, h) > max_size:
+            r = max_size / max(w, h)
+            pil = pil.resize((max(1, int(w * r)), max(1, int(h * r))), Image.LANCZOS)
+        buf = io.BytesIO()
+        pil.save(buf, format='JPEG', quality=85)
+        return base64.b64encode(buf.getvalue()).decode('utf-8')
 
+    # ────────── 主函数 ──────────
     def generate_content(
         self,
         protocol,
@@ -162,81 +182,50 @@ class OpenAINode:
         max_tokens=500,
         detail="auto",
         image_max_size=1024,
-        proxy_url=""
+        proxy_url="",
     ):
-        """
-        调用 OpenAI API 生成内容。
-        - 有图像时：使用多模态格式（image_url + text）发送请求
-        - 无图像时：使用纯文本格式发送请求，实现普通对话
-        """
+        # ---- 1. 拼接 URL（唯一产生 :// 的地方） ----
+        full_url = _build_full_url(protocol, api_url)
+        print(f"[Rui-Node] OpenAI -> {full_url}")
 
-        # ---- 拼接完整 URL ----
-        full_url = _build_url(protocol, api_url)
-        print(f"[Rui-Node🐶 OpenAI] 请求地址: {full_url}")
-
-        all_images = [
-            img for img in [
-                image_1,
-                image_2,
-                image_3,
-                image_4,
-                image_5,
-                image_6,
-            ] if img is not None
+        # ---- 2. 收集图像 ----
+        images = [
+            img for img in (image_1, image_2, image_3, image_4, image_5, image_6)
+            if img is not None
         ]
 
-        # ---- 构造 messages ----
-        messages = [
-            {"role": "system", "content": system_prompt}
-        ]
+        # ---- 3. 构造 messages ----
+        messages = [{"role": "system", "content": system_prompt}]
 
-        if all_images:
-            # 多模态模式：图像 + 文本
-            user_content = []
-
-            if user_prompt:
-                user_content.append({
-                    "type": "text",
-                    "text": user_prompt
-                })
-
-            for image in all_images:
-                img_tensor = image[0]
-                img_base64 = self._encode_image_tensor(img_tensor, image_max_size)
-                user_content.append({
+        if images:
+            # ===== 多模态模式 =====
+            parts = []
+            if user_prompt and user_prompt.strip():
+                parts.append({"type": "text", "text": user_prompt})
+            for img in images:
+                b64 = self._encode_image(img[0], image_max_size)
+                parts.append({
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:image/jpeg;base64,{img_base64}",
-                        "detail": detail
-                    }
+                        "url": f"data:image/jpeg;base64,{b64}",
+                        "detail": detail,
+                    },
                 })
-
-            if not user_content:
-                user_content.append({
-                    "type": "text",
-                    "text": " "
-                })
-
-            messages.append({
-                "role": "user",
-                "content": user_content
-            })
+            if not parts:
+                parts.append({"type": "text", "text": " "})
+            messages.append({"role": "user", "content": parts})
         else:
-            # 纯文本模式：无图像，直接发送文本对话
-            prompt_text = user_prompt.strip() if user_prompt else ""
-            if not prompt_text:
-                return ("（错误：未提供图片也未提供提示词，请至少输入 user_prompt）",)
+            # ===== 纯文本模式 =====
+            text = (user_prompt or "").strip()
+            if not text:
+                return ("（错误：未提供图片也未提供提示词，请至少填写 user_prompt）",)
+            messages.append({"role": "user", "content": text})
 
-            messages.append({
-                "role": "user",
-                "content": prompt_text
-            })
-
+        # ---- 4. 请求 ----
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}"
+            "Authorization": f"Bearer {api_key}",
         }
-
         payload = {
             "model": model,
             "messages": messages,
@@ -246,32 +235,32 @@ class OpenAINode:
         }
 
         proxies = None
-        if proxy_url and proxy_url.strip():
-            proxies = {
-                "http": proxy_url,
-                "https": proxy_url
-            }
+        p = _build_proxy_url(proxy_url)
+        if p:
+            proxies = {"http": p, "https": p}
 
         try:
-            response = requests.post(full_url, headers=headers, json=payload, proxies=proxies, timeout=60)
-            response.raise_for_status()
-            result = response.json()
-
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
-                return (content,)
-            else:
-                return (f"Error: API response format unexpected. Response: {json.dumps(result)}",)
-
+            resp = requests.post(full_url, headers=headers, json=payload,
+                                 proxies=proxies, timeout=120)
+            resp.raise_for_status()
+            data = resp.json()
+            if "choices" in data and data["choices"]:
+                return (data["choices"][0]["message"]["content"],)
+            return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)}",)
+        except requests.exceptions.ConnectionError as e:
+            return (f"连接失败（请检查 api_url 和网络）: {e}",)
+        except requests.exceptions.Timeout:
+            return ("请求超时（120s），请检查网络或 API 服务状态。",)
+        except requests.exceptions.HTTPError as e:
+            return (f"HTTP 错误 {resp.status_code}: {resp.text[:500]}",)
         except Exception as e:
-            return (f"Error calling OpenAI API: {str(e)}",)
+            return (f"请求异常: {type(e).__name__}: {e}",)
 
-# 节点映射字典
+
+# ────────── ComfyUI 注册 ──────────
 NODE_CLASS_MAPPINGS = {
-    "OpenAIAPINode": OpenAINode
+    "OpenAIAPINode": OpenAINode,
 }
-
-# 节点显示名称映射
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "OpenAIAPINode": "OpenAI API 连接 / OpenAI API Connector"
+    "OpenAIAPINode": "OpenAI API 连接 / OpenAI API Connector",
 }
