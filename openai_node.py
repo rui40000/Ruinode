@@ -1,4 +1,3 @@
-import torch
 import numpy as np
 import requests
 import json
@@ -76,6 +75,12 @@ class OpenAINode:
                 "detail": (["low", "high", "auto"], {
                     "default": "auto"
                 }),
+                "image_max_size": ("INT", {
+                    "default": 1024,
+                    "min": 256,
+                    "max": 4096,
+                    "step": 64
+                }),
                 "proxy_url": ("STRING", {
                     "default": "",
                     "multiline": False,
@@ -89,12 +94,19 @@ class OpenAINode:
     FUNCTION = "generate_content"
     CATEGORY = "Rui-Node🐶/AI模型🤖"
 
-    def _encode_image_tensor(self, img_tensor):
+    def _encode_image_tensor(self, img_tensor, image_max_size):
         img_np = img_tensor.cpu().numpy()
         img_np = np.clip(img_np, 0, 1)
         img_pil = Image.fromarray((img_np * 255).astype(np.uint8), 'RGB')
+        width, height = img_pil.size
+        if max(width, height) > image_max_size:
+            ratio = image_max_size / max(width, height)
+            img_pil = img_pil.resize(
+                (max(1, int(width * ratio)), max(1, int(height * ratio))),
+                Image.LANCZOS
+            )
         buffered = io.BytesIO()
-        img_pil.save(buffered, format="JPEG")
+        img_pil.save(buffered, format="JPEG", quality=85)
         return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
     def generate_content(
@@ -114,6 +126,7 @@ class OpenAINode:
         temperature=0.3,
         max_tokens=500,
         detail="auto",
+        image_max_size=1024,
         proxy_url=""
     ):
         """
@@ -132,12 +145,7 @@ class OpenAINode:
         ]
 
         if not all_images:
-            return ("Error: 至少需要连接一张图像到 image_1 ~ image_6。",)
-
-        try:
-            images = torch.cat(all_images, dim=0)
-        except Exception as e:
-            return (f"Error: 无法合并多张图像，请确保所有输入图像尺寸一致。详细信息: {str(e)}",)
+            return (user_prompt if user_prompt.strip() else "（未提供图片和描述）",)
 
         messages = [
             {"role": "system", "content": system_prompt}
@@ -151,9 +159,9 @@ class OpenAINode:
                 "text": user_prompt
             })
 
-        for idx in range(images.shape[0]):
-            img_tensor = images[idx]
-            img_base64 = self._encode_image_tensor(img_tensor)
+        for image in all_images:
+            img_tensor = image[0]
+            img_base64 = self._encode_image_tensor(img_tensor, image_max_size)
             user_content.append({
                 "type": "image_url",
                 "image_url": {
