@@ -4,6 +4,7 @@ import json
 import base64
 import io
 import os
+import re
 from PIL import Image
 
 # 快速解决方案：清除可能导致连接错误的代理环境变量
@@ -16,6 +17,20 @@ os.environ['HTTP_PROXY'] = ''
 os.environ['HTTPS_PROXY'] = ''
 os.environ['http_proxy'] = ''
 os.environ['https_proxy'] = ''
+
+
+def _fix_url(url: str) -> str:
+    """
+    修复 ComfyUI 前端吞掉 URL 中 '//' 的问题。
+    例如：
+      'https:api.openai.com/v1/...'  -> 'https://api.openai.com/v1/...'
+      'https:'                        -> 原样返回（后续会报更清晰的错误）
+      'https://api.openai.com/v1/...' -> 不变
+    """
+    url = url.strip()
+    # 匹配 http: 或 https: 后面紧跟的不是 // 的情况
+    fixed = re.sub(r'^(https?:)(?!//)', r'\1//', url)
+    return fixed
 
 class OpenAINode:
     """
@@ -130,8 +145,13 @@ class OpenAINode:
         proxy_url=""
     ):
         """
-        调用 OpenAI API 生成内容
+        调用 OpenAI API 生成内容。
+        - 有图像时：使用多模态格式（image_url + text）发送请求
+        - 无图像时：使用纯文本格式发送请求，实现普通对话
         """
+
+        # ---- 修复 URL：ComfyUI 前端可能吞掉 '//' ----
+        api_url = _fix_url(api_url)
 
         all_images = [
             img for img in [
@@ -144,42 +164,52 @@ class OpenAINode:
             ] if img is not None
         ]
 
-        if not all_images:
-            return (user_prompt if user_prompt.strip() else "（未提供图片和描述）",)
-
+        # ---- 构造 messages ----
         messages = [
             {"role": "system", "content": system_prompt}
         ]
 
-        user_content = []
+        if all_images:
+            # 多模态模式：图像 + 文本
+            user_content = []
 
-        if user_prompt:
-            user_content.append({
-                "type": "text",
-                "text": user_prompt
+            if user_prompt:
+                user_content.append({
+                    "type": "text",
+                    "text": user_prompt
+                })
+
+            for image in all_images:
+                img_tensor = image[0]
+                img_base64 = self._encode_image_tensor(img_tensor, image_max_size)
+                user_content.append({
+                    "type": "image_url",
+                    "image_url": {
+                        "url": f"data:image/jpeg;base64,{img_base64}",
+                        "detail": detail
+                    }
+                })
+
+            if not user_content:
+                user_content.append({
+                    "type": "text",
+                    "text": " "
+                })
+
+            messages.append({
+                "role": "user",
+                "content": user_content
             })
+        else:
+            # 纯文本模式：无图像，直接发送文本对话
+            prompt_text = user_prompt.strip() if user_prompt else ""
+            if not prompt_text:
+                return ("（错误：未提供图片也未提供提示词，请至少输入 user_prompt）",)
 
-        for image in all_images:
-            img_tensor = image[0]
-            img_base64 = self._encode_image_tensor(img_tensor, image_max_size)
-            user_content.append({
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{img_base64}",
-                    "detail": detail
-                }
+            messages.append({
+                "role": "user",
+                "content": prompt_text
             })
-
-        if not user_content:
-            user_content.append({
-                "type": "text",
-                "text": " "
-            })
-
-        messages.append({
-            "role": "user",
-            "content": user_content
-        })
 
         headers = {
             "Content-Type": "application/json",
@@ -211,7 +241,7 @@ class OpenAINode:
                 return (content,)
             else:
                 return (f"Error: API response format unexpected. Response: {json.dumps(result)}",)
-                
+
         except Exception as e:
             return (f"Error calling OpenAI API: {str(e)}",)
 
