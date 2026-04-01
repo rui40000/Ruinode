@@ -54,10 +54,28 @@ class OpenAINode:
                     "min": 0,
                     "max": 0xffffffffffffffff
                 }),
-                # max_tokens, temperature 等常用参数可以根据需要添加，这里保持精简
             },
             "optional": {
-                "image": ("IMAGE",),
+                "image_1": ("IMAGE",),
+                "image_2": ("IMAGE",),
+                "image_3": ("IMAGE",),
+                "image_4": ("IMAGE",),
+                "image_5": ("IMAGE",),
+                "image_6": ("IMAGE",),
+                "temperature": ("FLOAT", {
+                    "default": 0.3,
+                    "min": 0.0,
+                    "max": 2.0,
+                    "step": 0.1
+                }),
+                "max_tokens": ("INT", {
+                    "default": 500,
+                    "min": 1,
+                    "max": 8192
+                }),
+                "detail": (["low", "high", "auto"], {
+                    "default": "auto"
+                }),
                 "proxy_url": ("STRING", {
                     "default": "",
                     "multiline": False,
@@ -71,80 +89,103 @@ class OpenAINode:
     FUNCTION = "generate_content"
     CATEGORY = "Rui-Node🐶/AI模型🤖"
 
-    def generate_content(self, api_url, api_key, model, system_prompt, user_prompt, seed, image=None, proxy_url=""):
+    def _encode_image_tensor(self, img_tensor):
+        img_np = img_tensor.cpu().numpy()
+        img_np = np.clip(img_np, 0, 1)
+        img_pil = Image.fromarray((img_np * 255).astype(np.uint8), 'RGB')
+        buffered = io.BytesIO()
+        img_pil.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
+
+    def generate_content(
+        self,
+        api_url,
+        api_key,
+        model,
+        system_prompt,
+        user_prompt,
+        seed,
+        image_1=None,
+        image_2=None,
+        image_3=None,
+        image_4=None,
+        image_5=None,
+        image_6=None,
+        temperature=0.3,
+        max_tokens=500,
+        detail="auto",
+        proxy_url=""
+    ):
         """
         调用 OpenAI API 生成内容
         """
-        
-        # 准备消息列表
+
+        all_images = [
+            img for img in [
+                image_1,
+                image_2,
+                image_3,
+                image_4,
+                image_5,
+                image_6,
+            ] if img is not None
+        ]
+
+        if not all_images:
+            return ("Error: 至少需要连接一张图像到 image_1 ~ image_6。",)
+
+        try:
+            images = torch.cat(all_images, dim=0)
+        except Exception as e:
+            return (f"Error: 无法合并多张图像，请确保所有输入图像尺寸一致。详细信息: {str(e)}",)
+
         messages = [
             {"role": "system", "content": system_prompt}
         ]
-        
+
         user_content = []
-        
-        # 添加用户文本提示词
+
         if user_prompt:
             user_content.append({
                 "type": "text",
                 "text": user_prompt
             })
-            
-        # 处理图像输入
-        if image is not None:
-            # 获取批次中的第一张图像
-            img_tensor = image[0]
-            
-            # 将 Tensor 转换为 PIL Image
-            img_np = img_tensor.cpu().numpy()
-            img_np = np.clip(img_np, 0, 1)
-            img_pil = Image.fromarray((img_np * 255).astype(np.uint8), 'RGB')
-            
-            # 将图像转换为 base64
-            buffered = io.BytesIO()
-            img_pil.save(buffered, format="JPEG")
-            img_base64 = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            
-            # 添加图像内容
+
+        for idx in range(images.shape[0]):
+            img_tensor = images[idx]
+            img_base64 = self._encode_image_tensor(img_tensor)
             user_content.append({
                 "type": "image_url",
                 "image_url": {
-                    "url": f"data:image/jpeg;base64,{img_base64}"
+                    "url": f"data:image/jpeg;base64,{img_base64}",
+                    "detail": detail
                 }
             })
-        
-        # 如果 user_content 为空，且没有图像，至少添加一个空文本以防 API 报错
+
         if not user_content:
-             user_content.append({
+            user_content.append({
                 "type": "text",
-                "text": " " 
+                "text": " "
             })
 
-        # 构造用户消息
-        # 注意：对于不支持多模态的模型（如 gpt-3.5-turbo），发送 image_url 可能会报错
-        # 但遵循“符合最新规范”的要求，我们默认使用 content list 结构
-        # 如果模型不支持 list content，可以尝试回退到纯字符串（但这会丢失图片）
-        # 这里为了保持代码简洁，我们始终使用 list 结构，依赖用户选择支持 vision 的模型或仅输入文本
         messages.append({
             "role": "user",
             "content": user_content
         })
-        
-        # 构造请求头
+
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
-        
-        # 构造请求体
+
         payload = {
             "model": model,
             "messages": messages,
             "seed": seed,
-            # 可以添加 temperature 等参数
+            "temperature": temperature,
+            "max_tokens": max_tokens,
         }
-        
-        # 处理代理设置
+
         proxies = None
         if proxy_url and proxy_url.strip():
             proxies = {
@@ -153,14 +194,10 @@ class OpenAINode:
             }
 
         try:
-            # 发送请求
             response = requests.post(api_url, headers=headers, json=payload, proxies=proxies, timeout=60)
             response.raise_for_status()
-            
-            # 解析响应
             result = response.json()
-            
-            # 提取生成的文本
+
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"]
                 return (content,)
