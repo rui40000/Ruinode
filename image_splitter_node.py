@@ -31,6 +31,10 @@ class SpriteSplitter:
                     "default": "从左到右-从上到下",
                     "tooltip": "输出排序方式：控制拆分后元素的排列顺序。"
                 }),
+                "seed": ("INT", {
+                    "default": 0, "min": 0, "max": 0xffffffffffffffff,
+                    "tooltip": "随机种子：仅用于强制重新执行节点，不影响实际拆分结果。"
+                }),
             }
         }
 
@@ -169,6 +173,10 @@ class SpriteSplitterRGBA:
                 }),
                 "排序方式": (["从左到右-从上到下", "从上到下-从左到右", "面积从大到小", "面积从小到大"],{
                     "default": "从左到右-从上到下",
+                }),
+                "seed": ("INT", {
+                    "default": 0, "min": 0, "max": 0xffffffffffffffff,
+                    "tooltip": "随机种子：仅用于强制重新执行节点，不影响实际拆分结果。"
                 }),
             }
         }
