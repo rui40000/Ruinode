@@ -1,0 +1,350 @@
+{
+  "id": "9f3c1a70-5d2b-4e88-9c1a-7b6e2d4f0a11",
+  "revision": 0,
+  "last_node_id": 12,
+  "last_link_id": 14,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [-2320, 1180],
+      "size": [300, 330],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "图像",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1, 4, 9]
+        },
+        {
+          "label": "遮罩",
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"],
+      "title": "① 加载原图"
+    },
+    {
+      "id": 2,
+      "type": "LayerMask: LoadBiRefNetModelV2",
+      "pos": [-2320, 1570],
+      "size": [300, 58],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "birefnet_model",
+          "name": "birefnet_model",
+          "type": "BIREFNET_MODEL",
+          "links": [2]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui_layerstyle_advance",
+        "Node name for S&R": "LayerMask: LoadBiRefNetModelV2"
+      },
+      "widgets_values": ["BiRefNet-General"],
+      "color": "rgba(27, 80, 119, 0.7)"
+    },
+    {
+      "id": 3,
+      "type": "LayerMask: BiRefNetUltraV2",
+      "pos": [-1960, 1570],
+      "size": [300, 246],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "图像",
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        },
+        {
+          "label": "BiRefNet模型",
+          "name": "birefnet_model",
+          "type": "BIREFNET_MODEL",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "label": "图像",
+          "name": "image",
+          "type": "IMAGE",
+          "links": []
+        },
+        {
+          "label": "遮罩",
+          "name": "mask",
+          "type": "MASK",
+          "links": [3]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui_layerstyle_advance",
+        "Node name for S&R": "LayerMask: BiRefNetUltraV2"
+      },
+      "widgets_values": ["GuidedFilter", 4, 2, 0.01, 0.99, false, "cuda", 2],
+      "color": "rgba(27, 80, 119, 0.7)",
+      "title": "② 粗遮罩（只需框住主体）"
+    },
+    {
+      "id": 4,
+      "type": "RuiSDMatteLoader",
+      "pos": [-1960, 1180],
+      "size": [340, 130],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "sdmatte_model",
+          "type": "SDMATTE_MODEL",
+          "links": [5]
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiSDMatteLoader"
+      },
+      "widgets_values": ["SDMatte_plus.safetensors", "fp32", "auto", true],
+      "title": "③ SDMatte 加载器"
+    },
+    {
+      "id": 5,
+      "type": "RuiSDMatte",
+      "pos": [-1540, 1180],
+      "size": [300, 250],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "sdmatte_model",
+          "type": "SDMATTE_MODEL",
+          "link": 5
+        },
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 4
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "alpha",
+          "type": "MASK",
+          "links": [6, 7]
+        },
+        {
+          "name": "cutout",
+          "type": "IMAGE",
+          "links": [11]
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiSDMatte"
+      },
+      "widgets_values": ["bbox_mask", 1024, true, "", 35, 0, "fixed"],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "④ SDMatte 精细抠图"
+    },
+    {
+      "id": 6,
+      "type": "MaskPreview",
+      "pos": [-1180, 1180],
+      "size": [280, 300],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "遮罩",
+          "name": "mask",
+          "type": "MASK",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "Node name for S&R": "MaskPreview"
+      },
+      "widgets_values": [],
+      "title": "alpha 遮罩"
+    },
+    {
+      "id": 7,
+      "type": "InvertMask",
+      "pos": [-1180, 1540],
+      "size": [160, 26],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [8]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "Node name for S&R": "InvertMask"
+      },
+      "widgets_values": [],
+      "title": "反相（JoinImageWithAlpha 内部会再反一次）"
+    },
+    {
+      "id": 8,
+      "type": "JoinImageWithAlpha",
+      "pos": [-1180, 1620],
+      "size": [200, 46],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 9
+        },
+        {
+          "name": "alpha",
+          "type": "MASK",
+          "link": 8
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [10]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "Node name for S&R": "JoinImageWithAlpha"
+      },
+      "widgets_values": [],
+      "title": "合成透明背景 RGBA"
+    },
+    {
+      "id": 9,
+      "type": "PreviewImage",
+      "pos": [-880, 1540],
+      "size": [320, 400],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 10
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "透明背景成品（RGBA）"
+    },
+    {
+      "id": 10,
+      "type": "PreviewImage",
+      "pos": [-540, 1180],
+      "size": [320, 300],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 11
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "cutout（黑底预览）"
+    },
+    {
+      "id": 11,
+      "type": "Note",
+      "pos": [-2320, 800],
+      "size": [700, 330],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "SDMatte 精细抠图 —— 关键设置\n\n【is_transparent】← 最容易忽略、影响最大\n  · 玻璃 / 水 / 纱 / 烟雾 / 冰 等透明、半透明物体：必须打开\n  · 人物 / 动物 / 产品 等不透明物体：关闭\n  该开关切换模型的不透明度嵌入分支。抠玻璃时关闭它，背景会浮起一层灰雾\n  （实测：关闭时 84.8% 的像素落在半灰区间，打开后降到 27.7%）。\n\n【prompt_type】保持 bbox_mask\n  官方测试脚本的主路径，最稳。它只取 mask 的外接框，\n  所以上游的粗遮罩不必精确，框住主体即可。\n\n【inference_size】保持 1024，与官方测试一致。\n\n【caption】用 SDMatte_plus 时留空\n  plus 版训练集用 COCO-Matte 替换了 RefMatte，没学过文本指代，\n  填了反而更差。只有 SDMatte.pth 填英文描述才有正向作用。\n\n【point_mask】SDMatte_plus 不支持，会输出全黑，需要点提示请换 SDMatte.pth。\n\n【上游粗遮罩】BiRefNet 的 process_detail 保持关闭即可 ——\n  SDMatte 只用它的外接框，细化那一步纯属浪费时间。\n\n【显存】fp32@1024 开启 attention_slicing 约需 9.1GB（关闭约 15.5GB）。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "IMAGE"],
+    [2, 2, 0, 3, 1, "BIREFNET_MODEL"],
+    [3, 3, 1, 5, 2, "MASK"],
+    [4, 1, 0, 5, 1, "IMAGE"],
+    [5, 4, 0, 5, 0, "SDMATTE_MODEL"],
+    [6, 5, 0, 6, 0, "MASK"],
+    [7, 5, 0, 7, 0, "MASK"],
+    [8, 7, 0, 8, 1, "MASK"],
+    [9, 1, 0, 8, 0, "IMAGE"],
+    [10, 8, 0, 9, 0, "IMAGE"],
+    [11, 5, 1, 10, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.75,
+      "offset": [2600, -700]
+    }
+  },
+  "version": 0.4
+}
