@@ -2,3 +2,9 @@ torch
 numpy
 Pillow
 requests
+# 以下为 SDMatte 抠图节点所需（ComfyUI 环境通常已自带 opencv/scipy/safetensors）
+diffusers>=0.30.0
+transformers>=4.40.0
+safetensors
+scipy
+opencv-python
