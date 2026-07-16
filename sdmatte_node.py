@@ -258,7 +258,17 @@ class RuiSDMatte:
         dtype = next(model.unet.parameters()).dtype
         size = int(inference_size)
 
-        B, H, W, _ = image.shape
+        B, H, W, C = image.shape
+
+        # ComfyUI 的 IMAGE 约定是 RGB，但抠图类节点（BiRefNet / RMBG 等）常输出 RGBA。
+        # SDMatte 的 VAE 编码器只收 3 通道，多出的 alpha 必须丢掉而不能当颜色喂进去。
+        if C == 4:
+            image = image[..., :3]
+        elif C == 1:
+            image = image.repeat(1, 1, 1, 3)
+        elif C != 3:
+            raise ValueError(f"image 需要 1 / 3 / 4 通道，实际收到 {C} 通道")
+        image = image.contiguous()
 
         # 掩码可能与图像批次数不一致，按 ComfyUI 惯例广播
         if mask.dim() == 2:
