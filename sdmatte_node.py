@@ -218,7 +218,9 @@ class RuiSDMatte:
                     "tooltip": "视觉提示类型。\n"
                                "bbox_mask：取掩码外接框作为提示，官方测试脚本的默认路径，通常最稳；\n"
                                "mask：直接用掩码本身，适合已有较准的粗分割；\n"
-                               "point_mask：在掩码内随机取 10 个点；\n"
+                               "point_mask：在掩码内随机取 10 个点。\n"
+                               "  ⚠ 仅 SDMatte.pth 支持；SDMatte_plus.pth 用它会输出全黑，\n"
+                               "  因为 SDMatte*(plus) 的训练集用 COCO-Matte 替换了 RefMatte，未训练点提示；\n"
                                "auto_mask：不给定位信息，全图自动，画面只有单一主体时可用。"
                 }),
                 "inference_size": ([512, 640, 768, 896, 1024, 1152, 1280], {
@@ -234,11 +236,19 @@ class RuiSDMatte:
             "optional": {
                 "caption": ("STRING", {
                     "default": "", "multiline": False,
-                    "tooltip": "可选的文本描述（对应 RefMatte 的表达式）。留空即为官方测试时的默认行为。"
+                    "tooltip": "目标物体的英文描述（对应 RefMatte 的指代表达式），经 CLIP 编码后\n"
+                               "注入 UNet 的下采样/上采样两段 cross-attention。\n"
+                               "· SDMatte.pth：有语义作用，填对能小幅提升（实测羊驼图 MAD 0.01120→0.01072）\n"
+                               "· SDMatte_plus.pth：无语义作用，填了反而更差，请留空\n"
+                               "  （plus 的训练集用 COCO-Matte 替换了 RefMatte，未学过文本指代）\n"
+                               "留空即官方测试时的默认行为。"
                 }),
                 "point_radius": ("INT", {
                     "default": 35, "min": 5, "max": 100,
-                    "tooltip": "仅 point_mask 生效。官方测试期取 35（训练 radius 25 + 10）。"
+                    "tooltip": "仅 prompt_type=point_mask 时生效，其余模式完全不参与运算。\n"
+                               "含义：在提示区域随机取 10 个点，每点用 sigma=该值的高斯核晕开成光斑，\n"
+                               "再逐像素取最大值合成提示图 —— 即每个点的影响半径。\n"
+                               "官方训练用 25，测试期用 25+10=35，故默认 35。"
                 }),
                 "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
             },
@@ -324,6 +334,15 @@ class RuiSDMatte:
             a = cv2.resize(a, (W, H), interpolation=cv2.INTER_LINEAR)
             alphas.append(torch.from_numpy(np.clip(a, 0.0, 1.0)))
         alpha = torch.stack(alphas)  # [B,H,W]
+
+        # SDMatte*（即 SDMatte_plus）的训练集以 COCO-Matte 替换了 RefMatte，未学过点提示，
+        # 喂 point_mask 会输出接近全黑。这不会报错，只会悄悄给出空结果，故主动提示。
+        if prompt_type == "point_mask" and float(alpha.max()) < 0.1:
+            print(
+                "[Ruinode-SDMatte] 警告：point_mask 提示下输出接近全黑。"
+                "官方 SDMatte_plus(SDMatte*) 不支持点提示（其训练集用 COCO-Matte 替换了 RefMatte）。"
+                "请改用 bbox_mask，或换成 SDMatte.pth。"
+            )
 
         cutout = image.detach().cpu().float() * alpha.unsqueeze(-1)
 

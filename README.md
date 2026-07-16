@@ -591,8 +591,9 @@ SDMatte 检查点覆盖。官方 HuggingFace 仓库本身也只发布 `.pth` 加
 | `prompt_type` | 视觉提示类型，见下表 |
 | `inference_size` | 默认 `1024`，与官方测试一致 |
 | `is_transparent` | 玻璃、纱、烟雾等透明物体**务必打开** |
-| `caption` | 可选文本描述，留空即官方默认行为 |
-| `point_radius` | 仅 `point_mask` 生效，默认 35 |
+| `caption` | 目标物体的英文描述。**仅 `SDMatte.pth` 有效，`SDMatte_plus.pth` 请留空**，见下文 |
+| `point_radius` | 仅 `point_mask` 生效。每个点晕开的高斯 sigma，默认 35 |
+| `seed` | 仅 `point_mask` 生效（10 个点是随机取的） |
 
 `prompt_type` 选择：
 
@@ -600,8 +601,34 @@ SDMatte 检查点覆盖。官方 HuggingFace 仓库本身也只发布 `.pth` 加
 |---|---|---|
 | `bbox_mask` | 取掩码外接框作为提示 | **默认，官方测试脚本的主路径，通常最稳** |
 | `mask` | 直接用掩码本身 | 已有较准的粗分割时 |
-| `point_mask` | 在掩码内随机取 10 个点 | 复现论文的点提示实验 |
+| `point_mask` | 在掩码内随机取 10 个点 | **仅 `SDMatte.pth` 支持**，见下文 |
 | `auto_mask` | 不给定位信息 | 画面只有单一主体 |
+
+#### ⚠ 两个权重的能力不同（实测）
+
+官方 README 里，**SDMatte** 与 **SDMatte\***（即 `SDMatte_plus`）的训练集不同：
+前者含 **RefMatte**（指代表达式抠图数据集，点提示与文本提示的来源），
+后者用 **COCO-Matte** 替换了它。这导致 plus 版**不具备点提示与文本指代能力**：
+
+| | `SDMatte.pth` | `SDMatte_plus.pth` |
+|---|---|---|
+| `bbox_mask` / `mask` / `auto_mask` | ✅ | ✅ |
+| `point_mask` | ✅ MAD 0.0135 | ❌ **输出全黑**（max 仅 0.079） |
+| `caption` 语义 | ✅ 填对小幅提升 | ❌ 无作用，填了反而更差 |
+
+`caption` 实测（羊驼图，MAD 越低越好）：
+
+| caption | `SDMatte` | `SDMatte_plus` |
+|---|---|---|
+| `""`（留空） | 0.01120 | **0.01135** ← 最好 |
+| `"alpaca"`（语义正确） | **0.01072** ← 最好 | 0.01160 ← 最差 |
+| `"tree"`（语义错误） | 0.01111 | 0.01119 |
+
+在 `SDMatte` 上，语义正确的描述确实更准；在 `plus` 上语义完全失效甚至反向，
+说明它只是给 cross-attention 注入了噪声扰动，并非在理解文本。
+
+**结论**：用 `SDMatte_plus.pth` 时保持 `caption` 留空、`prompt_type` 用 `bbox_mask`；
+想用点提示或文本指代，请换 `SDMatte.pth`。节点在 `point_mask` 输出接近全黑时会打印警告。
 
 #### 典型接法
 
