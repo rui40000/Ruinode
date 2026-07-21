@@ -5,8 +5,8 @@ ZenMux API 连接节点
 通过 ZenMux 聚合平台（https://zenmux.ai）调用其收录的所有文本类模型。
 
 特性：
-- 模型选择做成「厂商 → 模型」两级级联：先在 vendor 下拉里选厂商，
-  再在 model 下拉里选该厂商的模型（联动由配套前端 zenmux_cascade.js 完成）。
+- 模型下拉覆盖 ZenMux 全部文本模型，按「厂商/模型名」排序聚类；
+  ComfyUI 下拉自带搜索，输入厂商前缀（如 "anthropic/"）即可快速过滤。
 - 每个模型选项后面直接标注输入/输出价格（USD / 百万 token）。
 - 具备常规 API 节点的完整参数：api_key、system/user prompt、seed、
   temperature、top_p、max_tokens、以及可选的多模态图像输入与代理。
@@ -31,7 +31,6 @@ from .model_registry import (
     DEFAULT_MODEL_ID,
     default_model_label,
     all_model_labels,
-    all_vendors,
     label_to_model_id,
 )
 
@@ -83,7 +82,6 @@ class ZenMuxNode:
     # ────────── 输入定义 ──────────
     @classmethod
     def INPUT_TYPES(cls):
-        vendors = all_vendors()
         model_labels = all_model_labels()
         default_label = default_model_label()
         return {
@@ -92,13 +90,8 @@ class ZenMuxNode:
                     "default": "",
                     "multiline": False,
                 }),
-                # vendor 只用于前端级联筛选；后端不依赖它（真实模型从 model 解析）。
-                # 默认选中 openai。
-                "vendor": (vendors, {
-                    "default": "openai" if "openai" in vendors else (vendors[0] if vendors else "openai"),
-                }),
-                # model 的候选是「全量」模型标签（含价格），保证 ComfyUI 后端校验通过；
-                # 前端 JS 会按 vendor 把可见项收窄到该厂商。
+                # 全量模型标签（含价格），已按厂商排序聚类；
+                # 下拉搜索框输入厂商前缀（如 "qwen/"）即可过滤。
                 "model": (model_labels, {
                     "default": default_label,
                 }),
@@ -169,12 +162,12 @@ class ZenMuxNode:
 
     # ────────── 宽松校验 ──────────
     @classmethod
-    def VALIDATE_INPUTS(cls, vendor, model):
+    def VALIDATE_INPUTS(cls, model):
         """
-        接管 vendor / model 两个下拉的校验，替代 ComfyUI 内置的
-        「值必须在候选列表里」检查：价格快照更新后，旧工作流里保存的
-        标签（带旧价格）不再逐字匹配新列表，但只要能解析出 model id
-        就应放行，避免整个工作流被判为无效。
+        接管 model 下拉的校验，替代 ComfyUI 内置的「值必须在候选列表里」
+        检查：价格快照更新后，旧工作流里保存的标签（带旧价格）不再逐字
+        匹配新列表，但只要能解析出 model id 就应放行，避免整个工作流
+        被判为无效。
         """
         if label_to_model_id(model) is None:
             return f"无法从 '{model}' 解析出 ZenMux 模型 id"
@@ -198,7 +191,6 @@ class ZenMuxNode:
     def generate(
         self,
         api_key,
-        vendor,
         model,
         system_prompt,
         user_prompt,
