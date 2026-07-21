@@ -42,8 +42,14 @@ except Exception as _e:
     SDMATTE_NODE_CLASS_MAPPINGS = {}
     SDMATTE_NODE_DISPLAY_NAME_MAPPINGS = {}
 # 新增：ZenMux API 连接节点（聚合平台，厂商→模型二级选择，标签含价格）
-from .zenmux import NODE_CLASS_MAPPINGS as ZENMUX_NODE_CLASS_MAPPINGS
-from .zenmux import NODE_DISPLAY_NAME_MAPPINGS as ZENMUX_NODE_DISPLAY_NAME_MAPPINGS
+# 同样用 try/except 保护：万一快照损坏或依赖缺失，不连累其余节点加载
+try:
+    from .zenmux import NODE_CLASS_MAPPINGS as ZENMUX_NODE_CLASS_MAPPINGS
+    from .zenmux import NODE_DISPLAY_NAME_MAPPINGS as ZENMUX_NODE_DISPLAY_NAME_MAPPINGS
+except Exception as _e:
+    print(f"[Ruinode] ZenMux 节点未加载：{_e}")
+    ZENMUX_NODE_CLASS_MAPPINGS = {}
+    ZENMUX_NODE_DISPLAY_NAME_MAPPINGS = {}
 
 # 合并节点映射字典
 NODE_CLASS_MAPPINGS = {}
