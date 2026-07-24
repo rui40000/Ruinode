@@ -2,3 +2,12 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .DS_Store
+
+# 字体二进制不入库（版权 + 体积原因，见 font/README.md）
+font/*.ttf
+font/*.otf
+font/*.ttc
+font/*.otc
+font/*.TTF
+font/*.OTF
+font/*.TTC
