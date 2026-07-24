@@ -8,6 +8,8 @@ ZenMux API 连接节点
 - 模型下拉覆盖 ZenMux 全部文本模型，按「厂商/模型名」排序聚类；
   ComfyUI 下拉自带搜索，输入厂商前缀（如 "anthropic/"）即可快速过滤。
 - 每个模型选项后面直接标注输入/输出价格（USD / 百万 token）。
+- usage_stats 输出单次运行的 token 消耗与费用（按快照单价折算，
+  汇率可用 usd_to_cny 参数调整）。
 - 具备常规 API 节点的完整参数：api_key、system/user prompt、seed、
   temperature、top_p、max_tokens、以及可选的多模态图像输入与代理。
 - 默认模型 openai/gpt-5.4-nano。
@@ -32,6 +34,8 @@ from .model_registry import (
     default_model_label,
     all_model_labels,
     label_to_model_id,
+    model_label_by_id,
+    model_prices,
 )
 
 # ZenMux 平台固定地址（OpenAI 兼容）
@@ -152,11 +156,18 @@ class ZenMuxNode:
                     "default": "",
                     "multiline": False,
                 }),
+                # usage_stats 里人民币换算用的汇率，可按当日牌价自行调整
+                "usd_to_cny": ("FLOAT", {
+                    "default": 7.2,
+                    "min": 0.1,
+                    "max": 100.0,
+                    "step": 0.01,
+                }),
             },
         }
 
-    RETURN_TYPES = ("STRING", "STRING")
-    RETURN_NAMES = ("text", "model_id")
+    RETURN_TYPES = ("STRING", "STRING", "STRING")
+    RETURN_NAMES = ("text", "model_id", "usage_stats")
     FUNCTION = "generate"
     CATEGORY = "Rui-Node🐶/AI模型🤖"
 
@@ -187,6 +198,41 @@ class ZenMuxNode:
         pil.save(buf, format='JPEG', quality=85)
         return base64.b64encode(buf.getvalue()).decode('utf-8')
 
+    # ────────── 消耗统计 ──────────
+    @staticmethod
+    def _fmt_cost(v):
+        """费用格式化：最多 6 位小数并去尾零；未知为 '?'。"""
+        if v is None:
+            return "?"
+        s = f"{v:.6f}".rstrip("0").rstrip(".")
+        return s if s else "0"
+
+    @staticmethod
+    def _build_usage_stats(model_id, usage, usd_to_cny):
+        """
+        由 API 响应的 usage 与快照单价生成三行消耗统计文本：
+            token消耗，输入：XXX，输出：XXX
+            模型类型：openai/gpt-5.4-nano [入$0.2/M 出$1.25/M]
+            价格换算，美元：XXX，人民币：XXX
+        usage 缺失/单价未知的项以 '?' 呈现；请求未发生时传 usage=None 记为 0 消耗。
+        """
+        if not isinstance(usage, dict):
+            usage = {"prompt_tokens": 0, "completion_tokens": 0}
+        in_tok = usage.get("prompt_tokens")
+        out_tok = usage.get("completion_tokens")
+        in_price, out_price = model_prices(model_id)
+
+        usd = None
+        if (isinstance(in_tok, (int, float)) and isinstance(out_tok, (int, float))
+                and in_price is not None and out_price is not None):
+            usd = in_tok / 1e6 * in_price + out_tok / 1e6 * out_price
+        cny = usd * usd_to_cny if usd is not None else None
+
+        tok = lambda t: str(int(t)) if isinstance(t, (int, float)) else "?"  # noqa: E731
+        return (f"token消耗，输入：{tok(in_tok)}，输出：{tok(out_tok)}\n"
+                f"模型类型：{model_label_by_id(model_id)}\n"
+                f"价格换算，美元：{ZenMuxNode._fmt_cost(usd)}，人民币：{ZenMuxNode._fmt_cost(cny)}")
+
     # ────────── 主函数 ──────────
     def generate(
         self,
@@ -208,14 +254,19 @@ class ZenMuxNode:
         image_max_size=1024,
         base_url=DEFAULT_BASE_URL,
         proxy_url="",
+        usd_to_cny=7.2,
     ):
         # ---- 1. 从下拉标签解析真实 model id ----
         model_id = label_to_model_id(model) or DEFAULT_MODEL_ID
         chat_url = _build_chat_url(base_url)
         print(f"[Rui-Node] ZenMux -> {chat_url}  model={model_id}")
 
+        # 请求未成功前的兜底统计（0 消耗）
+        zero_stats = self._build_usage_stats(model_id, None, usd_to_cny)
+
         if not (api_key or "").strip():
-            return ("（错误：未填写 api_key，请在节点里填入 ZenMux 的 API Key）", model_id)
+            return ("（错误：未填写 api_key，请在节点里填入 ZenMux 的 API Key）",
+                    model_id, zero_stats)
 
         # ---- 2. 收集图像 ----
         images = [
@@ -247,7 +298,8 @@ class ZenMuxNode:
         else:
             text = (user_prompt or "").strip()
             if not text:
-                return ("（错误：未提供图片也未提供提示词，请至少填写 user_prompt）", model_id)
+                return ("（错误：未提供图片也未提供提示词，请至少填写 user_prompt）",
+                        model_id, zero_stats)
             messages.append({"role": "user", "content": text})
 
         # ---- 4. 请求 ----
@@ -275,6 +327,8 @@ class ZenMuxNode:
                                  proxies=proxies, timeout=180)
             resp.raise_for_status()
             data = resp.json()
+            # 消耗统计（成功与格式异常场景都尽量取真实 usage）
+            stats = self._build_usage_stats(model_id, data.get("usage"), usd_to_cny)
             if data.get("choices"):
                 msg = data["choices"][0].get("message", {})
                 content = msg.get("content", "")
@@ -282,18 +336,19 @@ class ZenMuxNode:
                     content = "".join(
                         seg.get("text", "") for seg in content if isinstance(seg, dict)
                     )
-                return (content or "", model_id)
-            return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)[:800]}", model_id)
+                return (content or "", model_id, stats)
+            return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)[:800]}",
+                    model_id, stats)
         except requests.exceptions.ConnectionError as e:
-            return (f"连接失败（请检查网络/代理）: {e}", model_id)
+            return (f"连接失败（请检查网络/代理）: {e}", model_id, zero_stats)
         except requests.exceptions.Timeout:
-            return ("请求超时（180s），请检查网络或 ZenMux 服务状态。", model_id)
+            return ("请求超时（180s），请检查网络或 ZenMux 服务状态。", model_id, zero_stats)
         except requests.exceptions.HTTPError:
             code = resp.status_code if resp is not None else "?"
             body = resp.text[:600] if resp is not None else ""
-            return (f"HTTP 错误 {code}: {body}", model_id)
+            return (f"HTTP 错误 {code}: {body}", model_id, zero_stats)
         except Exception as e:
-            return (f"请求异常: {type(e).__name__}: {e}", model_id)
+            return (f"请求异常: {type(e).__name__}: {e}", model_id, zero_stats)
 
 
 # ────────── ComfyUI 注册 ──────────

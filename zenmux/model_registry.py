@@ -7,6 +7,8 @@ ZenMux 模型注册表
 - all_model_labels()     全量「带价格」下拉标签，按厂商 → 模型排序聚类
 - default_model_label()  默认模型 openai/gpt-5.4-nano 对应的标签
 - label_to_model_id()    从下拉标签解析真实 model id（对旧标签/纯 id 也兼容）
+- model_prices()         按 model id 查（输入单价, 输出单价），USD/百万 token
+- model_label_by_id()    按 model id 生成当前快照的带价签标签
 
 标签格式（价格单位：USD / 百万 token）：
     openai/gpt-5.4-nano [入$0.04/M 出$0.32/M]
@@ -63,6 +65,7 @@ _MODELS = _load_models()
 _LABELS = [_make_label(m) for m in _MODELS]
 _LABEL_TO_ID = {lb: m["id"] for lb, m in zip(_LABELS, _MODELS)}
 _KNOWN_IDS = {m["id"] for m in _MODELS}
+_ID_TO_MODEL = {m["id"]: m for m in _MODELS}
 
 
 def all_model_labels():
@@ -74,6 +77,20 @@ def default_model_label():
         if m["id"] == DEFAULT_MODEL_ID:
             return lb
     return _LABELS[0]
+
+
+def model_prices(model_id):
+    """按 model id 查（输入单价, 输出单价），单位 USD/百万 token；未知模型 (None, None)。"""
+    m = _ID_TO_MODEL.get(model_id)
+    if not m:
+        return (None, None)
+    return (m.get("input_price"), m.get("output_price"))
+
+
+def model_label_by_id(model_id):
+    """按 model id 生成当前快照的带价签标签；未收录的 id 原样返回。"""
+    m = _ID_TO_MODEL.get(model_id)
+    return _make_label(m) if m else (model_id or "?")
 
 
 def label_to_model_id(label):
