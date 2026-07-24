@@ -80,6 +80,46 @@ def _build_proxy_url(raw_proxy: str) -> str:
     return ('http://' + s) if s else ''
 
 
+# 遇到「参数不被支持 / 已弃用」的 400 时，可安全剔除的采样参数
+# （绝不触碰 model / messages 等核心字段）
+_ADJUSTABLE_PARAMS = ("temperature", "top_p", "seed", "max_tokens",
+                      "max_completion_tokens", "frequency_penalty",
+                      "presence_penalty", "top_k")
+# 判定「这条 400 是参数问题」的关键词（命中才尝试剔除重试）
+_PARAM_ERR_HINTS = ("deprecat", "unsupport", "not support", "not allowed",
+                    "invalid", "unexpected", "unknown", "must be", "cannot",
+                    "not permitted", "removed")
+
+
+def _diagnose_param(resp, payload):
+    """
+    从 400 响应里判断是哪个采样参数导致失败，返回处理指令：
+      ("drop", 参数名)     —— 从 payload 剔除该参数后重试
+      ("rename_mct", ...)  —— 把 max_tokens 改名为 max_completion_tokens 后重试
+      None                 —— 非参数类错误，不重试
+    ZenMux 各模型参数规则不一（claude-sonnet-5 弃用 temperature、gpt-5 reasoning
+    系要求 max_completion_tokens 等），靠错误消息动态识别，免维护静态清单。
+    """
+    try:
+        msg = (resp.json().get("error", {}) or {}).get("message", "") or resp.text or ""
+    except Exception:
+        msg = getattr(resp, "text", "") or ""
+    low = msg.lower()
+    # 特例：OpenAI reasoning 系要求用 max_completion_tokens 替代 max_tokens
+    if "max_completion_tokens" in low and "max_tokens" in payload:
+        return ("rename_mct", "max_tokens")
+    # 反引号/引号里的参数名优先（错误消息通常形如  `temperature` is deprecated）
+    for name in re.findall(r"""[`'"]([a-zA-Z_]+)[`'"]""", msg):
+        if name in payload and name in _ADJUSTABLE_PARAMS:
+            return ("drop", name)
+    # 回退：错误像参数问题时，扫描 payload 里哪个参数名出现在消息中
+    if any(h in low for h in _PARAM_ERR_HINTS):
+        for name in _ADJUSTABLE_PARAMS:
+            if name in payload and name in low:
+                return ("drop", name)
+    return None
+
+
 class ZenMuxNode:
     """ZenMux API 连接节点。"""
 
@@ -326,9 +366,30 @@ class ZenMuxNode:
             proxies = {"http": p, "https": p}
 
         resp = None
+        dropped = []  # 记录被剔除/改名的参数，供最终报错时提示
         try:
-            resp = requests.post(chat_url, headers=headers, json=payload,
-                                 proxies=proxies, timeout=180)
+            # 自适应参数重试：ZenMux 聚合的部分模型弃用/不支持某些采样参数
+            # （claude-sonnet-5 弃用 temperature、gpt-5 reasoning 系要 max_completion_tokens
+            #  等），命中即剔除/改名后重试，正常请求不受影响、零额外开销。
+            for _ in range(len(_ADJUSTABLE_PARAMS) + 2):
+                resp = requests.post(chat_url, headers=headers, json=payload,
+                                     proxies=proxies, timeout=180)
+                if resp.status_code == 400:
+                    fix = _diagnose_param(resp, payload)
+                    if fix:
+                        action, param = fix
+                        if action == "rename_mct":
+                            payload["max_completion_tokens"] = payload.pop("max_tokens")
+                            dropped.append("max_tokens→max_completion_tokens")
+                            print("[Rui-Node] ZenMux: 该模型要求 max_completion_tokens，"
+                                  "已改名重试")
+                        else:
+                            payload.pop(param, None)
+                            dropped.append(param)
+                            print(f"[Rui-Node] ZenMux: 该模型不支持参数 '{param}'，"
+                                  "已剔除后重试")
+                        continue
+                break
             resp.raise_for_status()
             data = resp.json()
             if data.get("choices"):
@@ -352,7 +413,8 @@ class ZenMuxNode:
         except requests.exceptions.HTTPError:
             code = resp.status_code if resp is not None else "?"
             body = resp.text[:600] if resp is not None else ""
-            return (f"HTTP 错误 {code}: {body}", model_id, zero_stats)
+            hint = f"（已尝试剔除参数 {', '.join(dropped)} 仍失败）" if (code == 400 and dropped) else ""
+            return (f"HTTP 错误 {code}: {body}{hint}", model_id, zero_stats)
         except Exception as e:
             return (f"请求异常: {type(e).__name__}: {e}", model_id, zero_stats)
 
