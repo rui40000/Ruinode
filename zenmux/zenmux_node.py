@@ -208,13 +208,15 @@ class ZenMuxNode:
         return s if s else "0"
 
     @staticmethod
-    def _build_usage_stats(model_id, usage, usd_to_cny):
+    def _build_usage_stats(model_id, usage, usd_to_cny, out_text=None):
         """
-        由 API 响应的 usage 与快照单价生成三行消耗统计文本：
+        由 API 响应的 usage、输出文本与快照单价生成四行消耗统计：
             token消耗，输入：XXX，输出：XXX
+            输出文字数量：XXX
             模型类型：openai/gpt-5.4-nano [入$0.2/M 出$1.25/M]
             价格换算，美元：XXX，人民币：XXX
         usage 缺失/单价未知的项以 '?' 呈现；请求未发生时传 usage=None 记为 0 消耗。
+        out_text 为模型返回的文本，字数按字符数计（含标点）；无输出记 0。
         """
         if not isinstance(usage, dict):
             usage = {"prompt_tokens": 0, "completion_tokens": 0}
@@ -228,8 +230,10 @@ class ZenMuxNode:
             usd = in_tok / 1e6 * in_price + out_tok / 1e6 * out_price
         cny = usd * usd_to_cny if usd is not None else None
 
+        n_chars = len(out_text) if isinstance(out_text, str) else 0
         tok = lambda t: str(int(t)) if isinstance(t, (int, float)) else "?"  # noqa: E731
         return (f"token消耗，输入：{tok(in_tok)}，输出：{tok(out_tok)}\n"
+                f"输出文字数量：{n_chars}\n"
                 f"模型类型：{model_label_by_id(model_id)}\n"
                 f"价格换算，美元：{ZenMuxNode._fmt_cost(usd)}，人民币：{ZenMuxNode._fmt_cost(cny)}")
 
@@ -327,8 +331,6 @@ class ZenMuxNode:
                                  proxies=proxies, timeout=180)
             resp.raise_for_status()
             data = resp.json()
-            # 消耗统计（成功与格式异常场景都尽量取真实 usage）
-            stats = self._build_usage_stats(model_id, data.get("usage"), usd_to_cny)
             if data.get("choices"):
                 msg = data["choices"][0].get("message", {})
                 content = msg.get("content", "")
@@ -336,7 +338,11 @@ class ZenMuxNode:
                     content = "".join(
                         seg.get("text", "") for seg in content if isinstance(seg, dict)
                     )
+                stats = self._build_usage_stats(model_id, data.get("usage"),
+                                                usd_to_cny, content or "")
                 return (content or "", model_id, stats)
+            # 格式异常：无正文可计字数，但 usage 仍尽量取真实值
+            stats = self._build_usage_stats(model_id, data.get("usage"), usd_to_cny)
             return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)[:800]}",
                     model_id, stats)
         except requests.exceptions.ConnectionError as e:
