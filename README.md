@@ -16,6 +16,7 @@ Rui-Node🐶 是一个功能丰富的 ComfyUI 节点集合，提供图像处理�
 - [颜色匹配器 / Color Matcher](#13-颜色匹配器--color-matcher)
 - [素材拆分 / Sprite Splitter](#14-素材拆分--sprite-splitter)
 - [素材拆分(带透明通道) / Sprite Splitter RGBA](#15-素材拆分带透明通道--sprite-splitter-rgba)
+- [满屏文字水印 / Full-Screen Text Watermark](#21-满屏文字水印--full-screen-text-watermark)
 
 ### 📁 文件存储与加载类
 - [按路径加载图像 / Load Image By Path](#3-按路径加载图像--load-image-by-path)
@@ -25,6 +26,7 @@ Rui-Node🐶 是一个功能丰富的 ComfyUI 节点集合，提供图像处理�
 - [千问编辑图像生成 / Qwen Edit Image Generation](#4-千问编辑图像生成--qwen-edit-image-generation)
 - [SDMatte 精细抠图 / SDMatte Interactive Matting](#17-sdmatte-精细抠图--sdmatte-interactive-matting)
 - [ZenMux API 连接 / ZenMux API Connector](#18-zenmux-api-连接--zenmux-api-connector)
+- [FeyNobg 抠图 / FeyNobg Matting](#22-feynobg-抠图--feynobg-matting)
 
 ### 📝 文本处理类
 - [镜头分词器 / Shot Splitter](#5-镜头分词器--shot-splitter)
@@ -813,6 +815,77 @@ WAS Node Suite 的「Text Multiline」会把 `#` 开头的行**当注释删除**
 **使用场景**:
 - 为 [Markdown转图片](#19-markdown转图片--markdown-to-image) 提供含 `#` 标题的原样文本
 - 存放任何不希望被上游文本节点"加工"的内容
+
+---
+
+### 21. 满屏文字水印 / Full-Screen Text Watermark
+
+**分类**: `Rui-Node🐶/图像调节🎨`
+
+**功能描述**:  
+给输入图像铺满一层平铺的文字水印，常用于版权标注、样图防盗、批量打标。文字按**交错网格**平铺，整体旋转后从中心裁切与原图等大的区域，因此任意旋转角度下四角也都被水印覆盖，不留空白。支持中英文混排与多行文案（用换行分隔），逐字符绘制以支持字间距。批量图像逐张处理。
+
+**输入参数**:
+- `image` (IMAGE): 输入图像
+- `text` (STRING, 多行): 水印文案，支持换行分隔的多行文本
+- `font` (选择): 字体，列表来自 `Ruinode/font` 目录（ttf/otf/ttc，放入后刷新页面即出现，与 Markdown 节点共用同一套字体扫描）
+- `font_size` (INT): 文字大小（像素），默认 48，范围 8~500
+- `angle` (FLOAT): 水印整体旋转角度（度），默认 30，范围 -180~180
+- `density` (FLOAT): 水印密度，综合控制**行间距与同行水印之间的间距**，值越大越密，默认 1.0，范围 0.1~5.0
+- `letter_spacing` (INT): 字间距，单条文案内相邻字符的额外间距（像素，可为负），默认 0，范围 -20~200
+- `opacity` (FLOAT): 水印透明程度，0=完全透明（原样返回），100=完全不透明，默认 35，范围 0~100
+- `color` (STRING): 水印文字颜色，支持 `#RRGGBB` / `#RGB` / `"r,g,b"` / 常见英文色名（white、red、yellow…），默认 `#FFFFFF`
+
+**输出**:
+- `image` (IMAGE): 叠加水印后的图像
+
+**使用场景**:
+- 给出图 / 样片加满屏防盗水印
+- 批量素材统一打上版权或"仅供参考"标注
+
+---
+
+### 22. FeyNobg 抠图 / FeyNobg Matting
+
+**分类**: `Rui-Node🐶/抠图✂️`
+
+**功能描述**:  
+全自动去背景抠图，**不需要任何提示**，输入图像直接输出 alpha。模型为 feyn 开源的 [FeyNobg](https://huggingface.co/feyninc/FeyNobg)（Apache-2.0），在 BiRefNet（CAAI AIR 2024）基础上扩展：Swin-Large 主干 + 梯度注意力 / 图像块注入 / 多尺度输入三项增强，原生 1024×1024 推理，权重约 1.05GB。
+
+**与 [SDMatte 精细抠图](#17-sdmatte-精细抠图--sdmatte-interactive-matting) 的分工**:
+- **FeyNobg**：全自动、一步出图、速度快，适合批量去背景（画面主体明确时首选）
+- **SDMatte**：需要框/掩码提示指定目标，适合画面里有多个主体、要精确抠其中一个
+
+**模型准备**:  
+首次运行会自动从 HuggingFace 下载到 `ComfyUI/models/nobg/FeyNobg`（约 1.05GB）。也可手动下载 `config.json`、`preprocessor_config.json`、`model.safetensors` 放入该目录。
+
+**输入参数**:
+- `image` (IMAGE): 输入图像
+- `model_name` (选择): `models/nobg` 下的模型目录，未找到时自动下载
+- `resolution` (选择): 推理分辨率，默认 **1024**（模型原生训练分辨率）。调低省显存但边缘变粗；调高不一定更好，可能出现结构断裂
+- `precision` (选择): `fp32`（默认）/ `fp16`。**实测两者输出一致**（同图 alpha 均值均为 0.657），fp16 显存减半且明显更快，推荐优先用 fp16
+- `device` (选择): `auto` / `cpu`
+- `invert_mask` (BOOLEAN, 可选): 反转 alpha，默认前景为白
+
+**输出**:
+- `alpha` (MASK): 抠图 alpha，值域 [0,1]
+- `cutout` (IMAGE): 去背景图（黑底）。需要透明 PNG 时，把 `alpha` 接到 `JoinImageWithAlpha` 一类节点
+
+**实测数据**（1139×1280 人物插画，RTX 显卡）:
+
+| 配置 | 耗时 | 前景占比 |
+|:-----|-----:|--------:|
+| fp32 @1024 | 12.4s（含首次加载） | 0.659 |
+| fp16 @1024 | 2.4s | 0.659 |
+| fp32 @768 | 2.2s | 0.656 |
+
+发丝、飘带、细链条等高频细节均能完整分离，边缘为自然的半透明过渡而非硬边。
+
+**实现说明**（两个坑，都已在节点内处理）:
+
+1. **预处理依赖**：上游 `nobg` 的预处理模块继承 `transformers>=5.4` 的 `TorchvisionBackend`，而 ComfyUI 常见环境仍是 transformers 4.x，直接引入会报 `No module named 'transformers.image_processing_backends'`。本节点内嵌了 nobg 推理子集（`feynobg/`）并**重写了预处理**，数值规格与官方逐项对齐（1024 双线性抗锯齿缩放 + ImageNet 标准化；后处理先 sigmoid 再缩放），**无需升级 transformers**。同时绕开了上游 `AutoModel` 里会联网查 tags 的 `model_info()`，保证离线可用。
+
+2. **权重键名不兼容（更隐蔽）**：FeyNobg 的权重用 transformers 5.x 导出，其 `SwinBackbone` 的模块命名与 4.x 不同（`bb.swin.*` 多一层、attention 从 `self.query/key/value` 重构为 `q/k/v_proj`、前馈层 `mlp.fc1/fc2` 对应 `intermediate.dense`/`output.dense`）。若不处理，958 个参数只有 405 个能对上，**整个 backbone 形同随机初始化——模型照样跑完不报错，但输出的 alpha 几乎全黑**（实测 max 0.02、mean 0.000）。节点内做了键名重映射（按环境自动判断是否需要），并**严格校验**：除确定性 buffer `relative_position_index` 与 backbone 末端未使用的 `bb.layernorm` 外，任何缺失/多余都直接报错中止，绝不接受静默劣化的结果。
 
 ---
 
