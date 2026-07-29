@@ -27,6 +27,7 @@ Rui-Node🐶 是一个功能丰富的 ComfyUI 节点集合，提供图像处理�
 - [SDMatte 精细抠图 / SDMatte Interactive Matting](#17-sdmatte-精细抠图--sdmatte-interactive-matting)
 - [ZenMux API 连接 / ZenMux API Connector](#18-zenmux-api-连接--zenmux-api-connector)
 - [FeyNobg 抠图 / FeyNobg Matting](#22-feynobg-抠图--feynobg-matting)
+- [Lucida 抠图 / Lucida Matting](#23-lucida-抠图--lucida-matting)
 
 ### 📝 文本处理类
 - [镜头分词器 / Shot Splitter](#5-镜头分词器--shot-splitter)
@@ -907,6 +908,65 @@ WAS Node Suite 的「Text Multiline」会把 `#` 开头的行**当注释删除**
 1. **预处理依赖**：上游 `nobg` 的预处理模块继承 `transformers>=5.4` 的 `TorchvisionBackend`，而 ComfyUI 常见环境仍是 transformers 4.x，直接引入会报 `No module named 'transformers.image_processing_backends'`。本节点内嵌了 nobg 推理子集（`feynobg/`）并**重写了预处理**，数值规格与官方逐项对齐（1024 双线性抗锯齿缩放 + ImageNet 标准化；后处理先 sigmoid 再缩放），**无需升级 transformers**。同时绕开了上游 `AutoModel` 里会联网查 tags 的 `model_info()`，保证离线可用。
 
 2. **权重键名不兼容（更隐蔽）**：FeyNobg 的权重用 transformers 5.x 导出，其 `SwinBackbone` 的模块命名与 4.x 不同（`bb.swin.*` 多一层、attention 从 `self.query/key/value` 重构为 `q/k/v_proj`、前馈层 `mlp.fc1/fc2` 对应 `intermediate.dense`/`output.dense`）。若不处理，958 个参数只有 405 个能对上，**整个 backbone 形同随机初始化——模型照样跑完不报错，但输出的 alpha 几乎全黑**（实测 max 0.02、mean 0.000）。节点内做了键名重映射（按环境自动判断是否需要），并**严格校验**：除确定性 buffer `relative_position_index` 与 backbone 末端未使用的 `bb.layernorm` 外，任何缺失/多余都直接报错中止，绝不接受静默劣化的结果。
+
+---
+
+### 23. Lucida 抠图 / Lucida Matting
+
+**分类**: `Rui-Node🐶/抠图✂️`
+
+**功能描述**:  
+全自动去背景，不需要任何提示。模型为 [Lucida](https://huggingface.co/egeorcun/lucida)（MIT），是 [BiRefNet_HR](https://huggingface.co/ZhengPeng7/BiRefNet_HR) 的微调版，训练目标是攻克多数开源抠图模型的短板：**伪装物体、透明材质（玻璃）、文字与 Logo、VFX 光效、插画**。权重约 885MB（220M 参数，Swin-Large 主干）。
+
+作者在 203 图 9 类别基准上的 MAE（越低越好）：
+
+| 类别 | Lucida | 商业参考 |
+|:-----|-------:|--------:|
+| 文字 / Logo 保留 | **0.0091** | 0.0123 |
+| 插画 | **0.0092** | — |
+| 伪装物体 | **0.0270** | — |
+| 印刷设计 / 贴纸 | **0.0235** | — |
+| 总体 | **0.0257** | — |
+
+**模型准备**:  
+首次运行自动下载到 `ComfyUI/models/lucida/lucida.safetensors`。也可手动下载仓库的 `model.safetensors`，改名为 `lucida.safetensors` 放入该目录。
+
+**输入参数**:
+- `image` (IMAGE): 输入图像
+- `model_name` (选择): `models/lucida` 下的权重文件，未找到时自动下载
+- `precision` (选择): `fp16`（默认）/ `fp32`
+- `device` (选择): `auto` / `cpu`
+- `alpha_threshold` / `alpha_softness` (FLOAT, 可选): 遮罩色阶，默认 (0.5, 1.0) 为恒等变换。用法同 [FeyNobg 节点](#22-feynobg-抠图--feynobg-matting)
+- `keep_aspect_ratio` (BOOLEAN, 可选): 保持宽高比，默认关闭
+- `invert_mask` (BOOLEAN, 可选): 反转 alpha
+
+**输出**:
+- `alpha` (MASK) / `cutout` (IMAGE，黑底)
+
+**⚠ 没有分辨率选项**：模型内部 `Config.size=1024` 且 decoder 走 patch split，与 1024 输入绑定，因此不像 FeyNobg 那样可调分辨率。
+
+**三个抠图节点怎么选**:
+
+| 节点 | 特点 | 适用 |
+|:-----|:-----|:-----|
+| **Lucida** | 全自动，把半透明材质也算前景 | 文字/Logo、插画、玻璃、发光特效、伪装物体 |
+| **FeyNobg** | 全自动，只找主要主体 | 常规主体照片，要求背景剥离干净 |
+| **SDMatte** | 需框/掩码提示 | 画面里多个主体、只抠其中一个 |
+
+**实测对比**（同图、同参数，本仓库两个全自动节点）:
+
+| 测试图 | Lucida 前景占比 | FeyNobg 前景占比 |
+|:-------|---------------:|----------------:|
+| 动漫插画（人物 + 云 + 栏杆） | 0.391 | 0.098 |
+| 游戏场景图 | 0.395 | 0.378 |
+| 人物插画 | 0.315 | 0.336 |
+
+第一张图差异最大，肉眼核对后确认**不是精度高低，而是「前景」的定义不同**：FeyNobg 只抠出人物，云与栏杆全部排除；Lucida 除人物外还把**半透明的云判为前景**（灰度 alpha）并保留了栏杆——这与它专门训练透明材质的目标一致。所以两者是互补关系：要干净剥离主体用 FeyNobg，要保住文字/玻璃/光效等半透明元素用 Lucida。**建议在自己的素材上实测再定**，示例工作流已把两者并联便于对照。
+
+⚠ `alpha_softness` 调小会把玻璃、发光这类**真实**半透明一并压实，而这正是 Lucida 的强项，务必按素材取舍。
+
+**实现说明**:  
+模型代码（`birefnet.py` / `BiRefNet_config.py`，2250 行）内嵌在 `lucida/` 子包，**不使用 `trust_remote_code`**——那会在运行时从 HuggingFace 拉取并执行远程 Python 代码，ComfyUI 场景下既不该联网也不该执行随时可变的远程代码；内嵌后版本固定、可离线、可审计。构造时传 `bb_pretrained=False`，避免联网下载 Swin 的 ImageNet 预训练权重。预处理规格与 BiRefNet 系一致，直接复用 FeyNobg 节点那份已验证实现。权重加载同样做**严格校验**（除窗口尺寸推出的确定性 buffer 外，任何失配直接报错中止）。
 
 ---
 
