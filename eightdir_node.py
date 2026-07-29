@@ -1,0 +1,302 @@
+# -*- coding: utf-8 -*-
+"""
+八方向雪碧图序列拆分节点（Ruinode）
+===================================
+用于「8 方向行走动画」制作管线：把每帧排布着 8 个朝向的雪碧图序列，
+拆成 8 条各自独立、可直接成片的动画序列。
+
+典型管线：
+    角色图 → (GPTimage2) 八方向静态图 → (Seedance 首尾帧) 循环行走视频
+    → VHS「Load Video」转序列帧（可选帧率）
+    → 【本节点】拆分 + 方向编号 + 分组
+    → 8×SaveImage 出序列帧，8×VHS「Video Combine」出透明 webm
+
+为什么用固定网格而不是连通区域拆分（本仓库的 RuiSpriteSplitterRGBA）：
+- 连通区域按包围盒排序，角色走动时位置会浮动，一旦跨过排序的行界，
+  方向对应关系就错乱 —— 几十上百帧里错一帧，整条动画就废了；
+- 连通区域按各自 bbox 裁剪，每个 sprite 尺寸不同，无法直接合成视频。
+固定网格没有这两个问题：格子位置恒定，方向对应天然稳定，尺寸也一致。
+（连通区域拆分依然更适合单张静态合图，两者各有用武之地。）
+
+白底转透明的关键点：角色身上常有白色衣物，按亮度阈值一刀切会把白衬衫
+一起掏空。这里改为**从画面边缘做连通性判断**：只有与边缘相连的白色才算背景，
+被角色包围的白色（衣服、高光）一律保留。
+"""
+import numpy as np
+import torch
+
+try:
+    import scipy.ndimage as ndi
+    _HAS_SCIPY = True
+except Exception:                                   # 理论上 ComfyUI 环境都有
+    _HAS_SCIPY = False
+
+MAX_DIRS = 8
+
+_BG_MODES = {
+    "白底转透明（推荐）": "white",
+    "已带透明通道": "keep",
+    "不处理（输出不透明）": "none",
+}
+
+# 与 3×3 中间留空的常见排布对应：行 1 面向观众、行 3 背对观众
+_DEFAULT_NAMES = "SW,S,SE,W,E,NW,N,NE"
+
+
+def _white_to_alpha(rgb, threshold, softness):
+    """
+    白底 → alpha。rgb: (H,W,3) float[0,1]，返回 (H,W) float[0,1]。
+
+    先按「离白色多远」算出软 alpha 保住边缘抗锯齿，再用连通性把
+    与画面边缘相连的白色判为背景 —— 只有这一部分才真正抹成全透明。
+    这样角色内部的白衬衫、白高光不会被误伤。
+    """
+    dist = 1.0 - rgb.min(axis=2)                     # 纯白=0，越大越不白
+    cut = max(1e-4, 1.0 - float(threshold))
+    soft = np.clip(dist / (cut * max(1e-3, softness)), 0.0, 1.0)
+
+    near_white = dist <= cut
+    if _HAS_SCIPY and near_white.any():
+        lab, n = ndi.label(near_white)
+        if n > 0:
+            border = np.concatenate([lab[0, :], lab[-1, :], lab[:, 0], lab[:, -1]])
+            ids = np.unique(border)
+            ids = ids[ids != 0]
+            if ids.size:
+                bg = np.isin(lab, ids)
+                soft = np.where(bg, 0.0, soft)
+    else:
+        soft = np.where(near_white, 0.0, soft)
+    return soft.astype(np.float32)
+
+
+def _drop_fragments(alpha, ratio):
+    """
+    清掉远小于主体的连通碎片。
+
+    网格切分难免会把相邻格子探过来的部件（手杖尖、飘起的衣角）切进本格，
+    这些碎片不仅难看，还会把 auto_crop 的包围盒撑大。
+    按「面积不足主体 ratio 倍」判定为碎片，这样与身体相连的道具不会被误删。
+    """
+    if ratio <= 0 or not _HAS_SCIPY:
+        return alpha
+    solid = alpha > 0.1
+    if not solid.any():
+        return alpha
+    lab, n = ndi.label(solid)
+    if n <= 1:
+        return alpha
+    areas = np.bincount(lab.ravel())
+    areas[0] = 0
+    keep = areas >= areas.max() * float(ratio)
+    keep[0] = False
+    return np.where(keep[lab], alpha, 0.0).astype(np.float32)
+
+
+def _bbox(alpha, thr=0.02):
+    """内容包围盒 (y0,y1,x0,x1)，无内容时返回 None。"""
+    m = alpha > thr
+    if not m.any():
+        return None
+    ys = np.where(m.any(axis=1))[0]
+    xs = np.where(m.any(axis=0))[0]
+    return int(ys[0]), int(ys[-1]) + 1, int(xs[0]), int(xs[-1]) + 1
+
+
+def _parse_cells(text, total):
+    out = set()
+    for tok in str(text or "").replace("，", ",").split(","):
+        tok = tok.strip()
+        if not tok:
+            continue
+        try:
+            v = int(tok)
+        except ValueError:
+            continue
+        if 0 <= v < total:
+            out.add(v)
+    return out
+
+
+class RuiEightDirSplit:
+    """八方向雪碧图序列 → 8 条独立动画序列。"""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "images": ("IMAGE", {
+                    "tooltip": "视频转出的序列帧，每帧是一张排布着多个朝向的雪碧图。"
+                }),
+                "grid_cols": ("INT", {
+                    "default": 3, "min": 1, "max": 8, "step": 1,
+                    "tooltip": "雪碧图的列数。"
+                }),
+                "grid_rows": ("INT", {
+                    "default": 3, "min": 1, "max": 8, "step": 1,
+                    "tooltip": "雪碧图的行数。"
+                }),
+                "empty_cells": ("STRING", {
+                    "default": "4", "multiline": False,
+                    "tooltip": "空格子的序号（行优先、从 0 开始，逗号分隔）。\n"
+                               "3×3 布局中间留空即填 4。留空表示没有空格。"
+                }),
+                "direction_names": ("STRING", {
+                    "default": _DEFAULT_NAMES, "multiline": False,
+                    "tooltip": "按「跳过空格后的先后顺序」给每个方向命名，逗号分隔。\n"
+                               "默认对应 3×3 中间留空、行 1 面向观众的排布：\n"
+                               "  SW  S  SE\n"
+                               "  W      E\n"
+                               "  NW  N  NE\n"
+                               "名字只用于 info 与你自己辨认，不影响画面内容。"
+                }),
+                "bg_mode": (list(_BG_MODES.keys()), {
+                    "default": "白底转透明（推荐）",
+                    "tooltip": "webm 要保留透明就必须先把白底转成 alpha。\n"
+                               "转换只把与画面边缘相连的白色判为背景，\n"
+                               "角色身上的白衣服、白高光会被保留。"
+                }),
+                "bg_threshold": ("FLOAT", {
+                    "default": 0.92, "min": 0.5, "max": 1.0, "step": 0.005,
+                    "tooltip": "白底判定阈值：像素三通道最小值高于它才算「接近白」。\n"
+                               "背景没扣干净就调低，角色边缘被啃掉就调高。"
+                }),
+                "edge_softness": ("FLOAT", {
+                    "default": 1.0, "min": 0.1, "max": 4.0, "step": 0.05,
+                    "tooltip": "边缘过渡宽度。原图边缘带抗锯齿，过渡太硬会有锯齿白边；\n"
+                               "调大更柔和，调小更锐利。"
+                }),
+                "fragment_threshold": ("FLOAT", {
+                    "default": 0.05, "min": 0.0, "max": 0.5, "step": 0.01,
+                    "tooltip": "清掉面积不足主体这一比例的连通碎片。\n"
+                               "网格切分会把相邻格子探过来的部件（手杖尖、飘起的衣角）\n"
+                               "切进本格，既难看又会撑大自动裁剪的范围。\n"
+                               "0 = 不清理；与身体相连的道具不会被误删。"
+                }),
+                "auto_crop": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "按内容裁掉多余空白。\n"
+                               "裁剪框取「该方向所有帧的并集」，因此整条序列尺寸一致，\n"
+                               "既能合成视频，角色也不会在帧间跳动。"
+                }),
+                "crop_padding": ("INT", {
+                    "default": 8, "min": 0, "max": 200, "step": 1,
+                    "tooltip": "裁剪时在内容外保留的边距（像素）。"
+                }),
+            },
+            "optional": {
+                "masks": ("MASK", {
+                    "tooltip": "可选。已有的透明通道（如上游抠图结果），\n"
+                               "配合 bg_mode=已带透明通道 使用。"
+                }),
+            },
+        }
+
+    RETURN_TYPES = ("IMAGE",) * MAX_DIRS + ("STRING",)
+    RETURN_NAMES = tuple(f"dir_{i + 1}" for i in range(MAX_DIRS)) + ("info",)
+    FUNCTION = "split"
+    CATEGORY = "Rui-Node🐶/图像调节🎨"
+
+    @classmethod
+    def VALIDATE_INPUTS(cls, **kwargs):
+        return True
+
+    def split(self, images, grid_cols, grid_rows, empty_cells,
+              direction_names, bg_mode, bg_threshold, edge_softness,
+              fragment_threshold, auto_crop, crop_padding, masks=None):
+        mode = _BG_MODES.get(bg_mode, "white")
+        B, H, W, C = images.shape
+        cols, rows = int(grid_cols), int(grid_rows)
+        total = cols * rows
+        empties = _parse_cells(empty_cells, total)
+        cell_ids = [i for i in range(total) if i not in empties]
+        n_dir = len(cell_ids)
+
+        names = [s.strip() for s in str(direction_names).replace("，", ",").split(",")
+                 if s.strip()]
+        while len(names) < n_dir:
+            names.append(f"dir{len(names) + 1}")
+
+        arr = images.detach().cpu().float().numpy()
+        if C == 4:
+            rgb_all, a_in = arr[..., :3], arr[..., 3]
+        else:
+            rgb_all, a_in = arr[..., :3], None
+        if masks is not None:
+            m = masks.detach().cpu().float().numpy()
+            if m.ndim == 2:
+                m = m[None]
+            if m.shape[0] != B:
+                m = np.repeat(m[:1], B, axis=0)
+            a_in = m
+
+        # 格子边界按浮点等分再取整，避免整除不尽时累计误差（如 1112/3）
+        ybnd = [int(round(r * H / rows)) for r in range(rows + 1)]
+        xbnd = [int(round(c * W / cols)) for c in range(cols + 1)]
+
+        # ---- 第一遍：切格 + 生成 alpha，同时累计每个方向的内容包围盒 ----
+        per_dir = [[] for _ in range(n_dir)]
+        boxes = [None] * n_dir
+        for b in range(B):
+            for di, cid in enumerate(cell_ids):
+                r, c = divmod(cid, cols)
+                y0, y1, x0, x1 = ybnd[r], ybnd[r + 1], xbnd[c], xbnd[c + 1]
+                rgb = rgb_all[b, y0:y1, x0:x1]
+                if mode == "white":
+                    alpha = _white_to_alpha(rgb, bg_threshold, edge_softness)
+                elif mode == "keep" and a_in is not None:
+                    alpha = a_in[b, y0:y1, x0:x1]
+                else:
+                    alpha = np.ones(rgb.shape[:2], dtype=np.float32)
+                if mode != "none":
+                    alpha = _drop_fragments(alpha, fragment_threshold)
+                per_dir[di].append((rgb, alpha))
+                if auto_crop:
+                    bb = _bbox(alpha)
+                    if bb is not None:
+                        boxes[di] = bb if boxes[di] is None else (
+                            min(boxes[di][0], bb[0]), max(boxes[di][1], bb[1]),
+                            min(boxes[di][2], bb[2]), max(boxes[di][3], bb[3]))
+
+        # ---- 第二遍：按并集包围盒统一裁剪并打包 ----
+        outs, notes = [], []
+        pad = int(crop_padding)
+        for di in range(n_dir):
+            frames = per_dir[di]
+            ch, cw = frames[0][0].shape[:2]
+            if auto_crop and boxes[di] is not None:
+                y0, y1, x0, x1 = boxes[di]
+                y0 = max(0, y0 - pad); x0 = max(0, x0 - pad)
+                y1 = min(ch, y1 + pad); x1 = min(cw, x1 + pad)
+            else:
+                y0, y1, x0, x1 = 0, ch, 0, cw
+            stack = np.empty((len(frames), y1 - y0, x1 - x0, 4), dtype=np.float32)
+            for fi, (rgb, alpha) in enumerate(frames):
+                stack[fi, ..., :3] = rgb[y0:y1, x0:x1]
+                stack[fi, ..., 3] = alpha[y0:y1, x0:x1]
+            outs.append(torch.from_numpy(stack))
+            notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]} "
+                         f"{x1 - x0}×{y1 - y0}")
+
+        info = (f"输入 {B} 帧 {W}×{H} → {cols}×{rows} 网格，"
+                f"空格 {sorted(empties) if empties else '无'}，"
+                f"得到 {n_dir} 个方向 × {B} 帧\n" + " | ".join(notes))
+        if n_dir > MAX_DIRS:
+            info += f"\n⚠ 方向数 {n_dir} 超过输出口数量 {MAX_DIRS}，只输出前 {MAX_DIRS} 个"
+        elif n_dir < MAX_DIRS:
+            info += (f"\n⚠ 方向数 {n_dir} 少于输出口数量 {MAX_DIRS}，"
+                     f"dir_{n_dir + 1}~dir_{MAX_DIRS} 为占位空图，请勿使用")
+        print(f"[Ruinode-8Dir] {info}")
+
+        # 输出口数量固定，方向不足时补占位图，避免下游拿到 None 直接报错
+        blank = torch.zeros((1, 8, 8, 4), dtype=torch.float32)
+        result = [outs[i] if i < len(outs) else blank for i in range(MAX_DIRS)]
+        return tuple(result) + (info,)
+
+
+NODE_CLASS_MAPPINGS = {
+    "RuiEightDirSplit": RuiEightDirSplit,
+}
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "RuiEightDirSplit": "八方向序列拆分 / 8-Direction Sprite Split",
+}
