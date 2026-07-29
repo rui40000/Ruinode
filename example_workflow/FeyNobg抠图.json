@@ -39,7 +39,7 @@
       "id": 2,
       "type": "RuiFeyNobg",
       "pos": [-1240, 400],
-      "size": [320, 170],
+      "size": [340, 260],
       "flags": {},
       "order": 1,
       "mode": 0,
@@ -66,7 +66,7 @@
         "aux_id": "rui40000/Ruinode",
         "Node name for S&R": "RuiFeyNobg"
       },
-      "widgets_values": ["FeyNobg", 1024, "fp16", "auto", false],
+      "widgets_values": ["FeyNobg", 1024, "fp16", "auto", 0.5, 1, false, false],
       "color": "#232",
       "bgcolor": "#353",
       "title": "② FeyNobg 抠图（全自动，无需提示）"
@@ -247,7 +247,7 @@
       "outputs": [],
       "properties": {},
       "widgets_values": [
-        "FeyNobg 抠图 —— 使用要点\n\n【模型】首次运行会自动下载到 ComfyUI/models/nobg/FeyNobg（约 1.05GB）。\n  也可手动下载 https://huggingface.co/feyninc/FeyNobg 的三个文件放进去：\n  config.json / preprocessor_config.json / model.safetensors\n\n【precision】推荐 fp16\n  实测 fp16 与 fp32 输出完全一致（同图 alpha 均值都是 0.657），\n  但 fp16 显存减半、速度快数倍。默认给 fp32 只是为老显卡留退路。\n\n【resolution】保持 1024\n  这是模型原生训练分辨率。降到 768 差别很小（前景占比 0.656 vs 0.659）\n  且更省显存；调高不一定更好，可能出现结构断裂。\n\n【适用范围】画面主体明确时效果最好\n  实测发丝、飘带、细链条等高频细节都能完整分离，边缘是自然的半透明过渡。\n  但它是「找出画面主体」的模型：给一张没有明确主体的图（例如 UI 截图、\n  纯风景），输出接近全黑是正常反应，不是故障。\n\n【与 SDMatte 的分工】\n  · FeyNobg：全自动、快，适合批量去背景 —— 主体明确时首选\n  · SDMatte：需要框/掩码提示指定目标，适合画面里有多个主体、只抠其中一个\n\n【透明 PNG】cutout 输出是黑底 RGB。要透明背景需走下面这条链路：\n  alpha → InvertMask → JoinImageWithAlpha（该节点内部会再反一次，故须先反相）\n\n【invert_mask】节点自带的反转开关只影响 alpha 本身，\n  与上面为 JoinImageWithAlpha 做的反相是两回事，别混用。"
+        "FeyNobg 抠图 —— 使用要点\n\n【模型】首次运行会自动下载到 ComfyUI/models/nobg/FeyNobg（约 1.05GB）。\n  也可手动下载 https://huggingface.co/feyninc/FeyNobg 的三个文件放进去：\n  config.json / preprocessor_config.json / model.safetensors\n\n【precision】推荐 fp16\n  实测 fp16 与 fp32 输出完全一致，但显存减半、速度快数倍。\n  默认给 fp32 只是为老显卡留退路。\n\n【resolution】保持 1024，这是模型原生训练分辨率。\n\n■ 主体「整片半透明发灰」怎么救 ————————————————\n\n模型对拿不准的区域会输出 0.5 上下的中间值，表现为整个人物/物体半透明。\n用下面两个参数拉一次色阶即可：\n\n【alpha_threshold】多大置信度算前景，默认 0.5\n【alpha_softness】过渡带宽度，默认 1.0 = 完全不处理\n\n  · 默认 (0.5, 1.0) —— 原样输出，一个像素都不动\n  · 推荐 (0.35, 0.3) —— 实测半透明像素占比从 1.49% 降到 0.31%，\n    主体均值几乎不变，即只压灰雾、不吃主体\n  · 硬边 (0.5, 0.0) —— 直接二值化，锯齿硬边，抠头发/玻璃慎用\n\n  ⚠ 只对已有一定响应的区域有效。模型压根没认出来的地方 alpha 接近 0，\n    再降阈值也救不回来 —— 那属于语义判断差异，得换模型或改用 SDMatte 指定目标。\n  ⚠ softness 越小，发丝等真实半透明细节损失越多，是一对权衡。\n\n【keep_aspect_ratio】长图形变的补救，默认关闭\n  模型固定吃 1024×1024，默认把图直接拉伸成正方形（与官方训练一致）。\n  手机截图这类 1:2 以上的长图会被压得很扁，可开启此项改为等比缩放 + 补边。\n  属试验性选项（与训练分布不同），常规比例建议保持关闭。\n\n【适用范围】它是「找出画面主体」的模型\n  发丝、飘带、细链条等高频细节都能完整分离。但给一张没有明确主体的图\n  （UI 截图、纯风景），输出接近全黑是正常反应，不是故障。\n\n【与 SDMatte 的分工】\n  · FeyNobg：全自动、快，适合批量去背景 —— 主体明确时首选\n  · SDMatte：需要框/掩码提示指定目标，适合画面里有多个主体、只抠其中一个\n\n【透明 PNG】cutout 输出是黑底 RGB。要透明背景需走下面这条链路：\n  alpha → InvertMask → JoinImageWithAlpha（该节点内部会再反一次，故须先反相）\n\n【invert_mask】节点自带的反转开关只影响 alpha 本身，\n  与上面为 JoinImageWithAlpha 做的反相是两回事，别混用。"
       ],
       "color": "#432",
       "bgcolor": "#653"

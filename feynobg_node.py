@@ -228,6 +228,29 @@ class RuiFeyNobg:
                 "device": (["auto", "cpu"], {"default": "auto"}),
             },
             "optional": {
+                "alpha_threshold": ("FLOAT", {
+                    "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01,
+                    "tooltip": "多大置信度才算前景。模型对拿不准的区域会输出 0.5 上下的\n"
+                               "中间值，表现为「整片主体半透明发灰」。\n"
+                               "把阈值调低（如 0.3）可把这类区域拉回不透明。\n"
+                               "注意：只对已有一定响应的区域有效；模型压根没认出来的\n"
+                               "地方 alpha 接近 0，再降阈值也救不回来。"
+                }),
+                "alpha_softness": ("FLOAT", {
+                    "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                    "tooltip": "阈值两侧过渡带的宽度，决定边缘软硬。\n"
+                               "1.0 = 完全不处理，原样输出模型结果（默认）\n"
+                               "0.2~0.4 = 压掉灰雾但保留发丝级过渡（推荐从 0.3 试）\n"
+                               "0 = 硬二值化，边缘变成锯齿硬边，抠玻璃/头发慎用"
+                }),
+                "keep_aspect_ratio": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "模型固定吃 1024×1024，默认会把图直接拉伸成正方形\n"
+                               "（与官方训练方式一致）。长图/宽图形变严重时可开启此项，\n"
+                               "改为等比缩放 + 边缘延展补边，推理后再裁掉补边部分。\n"
+                               "注意这与训练分布不同，属于试验性选项：\n"
+                               "极端长宽比（如手机截图 1:2 以上）通常有改善，常规比例建议关闭。"
+                }),
                 "invert_mask": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "反转 alpha：默认前景为白（1），开启后前景为黑。"
@@ -245,8 +268,26 @@ class RuiFeyNobg:
         """模型列表随目录变化，宽松放行，运行时兜底（含自动下载）。"""
         return True
 
+    @staticmethod
+    def _remap_alpha(alpha, threshold, softness):
+        """
+        按阈值 / 柔和度重新映射 alpha，相当于给遮罩拉一次色阶。
+
+        以 threshold 为中心、softness 为宽度取一段区间线性拉伸到 [0,1]：
+        区间以下压成全透明，以上提成全不透明，区间内保留平滑过渡。
+        默认 (0.5, 1.0) 时区间恰好是 [0,1]，等于原样返回。
+        """
+        low = threshold - softness / 2.0
+        high = threshold + softness / 2.0
+        if high <= low:                      # softness=0：硬二值化
+            return (alpha >= threshold).to(alpha.dtype)
+        if abs(low) < 1e-6 and abs(high - 1.0) < 1e-6:
+            return alpha                     # 默认参数，一个像素都不动
+        return ((alpha - low) / (high - low)).clamp(0.0, 1.0)
+
     def matting(self, image, model_name, resolution, precision, device,
-                invert_mask=False):
+                alpha_threshold=0.5, alpha_softness=1.0,
+                keep_aspect_ratio=False, invert_mask=False):
         import comfy.model_management
 
         from .feynobg import BiRefNetImageProcessor
@@ -274,18 +315,21 @@ class RuiFeyNobg:
         alphas = []
         for i in range(B):
             # 逐张推理：1024 分辨率下 Swin-Large 峰值显存不低，整批一次容易 OOM
-            pixel_values = proc.preprocess_tensor(
-                image[i:i + 1], device=dev, dtype=dtype)
+            pixel_values, meta = proc.preprocess_tensor(
+                image[i:i + 1], device=dev, dtype=dtype,
+                keep_aspect=bool(keep_aspect_ratio))
             with torch.no_grad():
                 outputs = model(pixel_values=pixel_values)
             # fp16 推理出的 logits 先转回 fp32 再 sigmoid/缩放，避免精度损失
             if isinstance(outputs, dict):
                 outputs = {"logits": outputs["logits"].float()}
             alpha = proc.post_process_alpha_matting(
-                outputs, target_sizes=[(H, W)])[0]
+                outputs, target_sizes=[(H, W)], crop=meta)[0]
             alphas.append(alpha.clamp(0, 1).cpu())
 
         alpha = torch.stack(alphas)  # [B,H,W]
+        alpha = self._remap_alpha(alpha, float(alpha_threshold),
+                                  float(alpha_softness))
         if invert_mask:
             alpha = 1.0 - alpha
 

@@ -65,25 +65,47 @@ class BiRefNetImageProcessor:
         )
 
     # ---------------------------------------------------------------- 预处理
-    def preprocess_tensor(self, images, device=None, dtype=torch.float32):
+    def preprocess_tensor(self, images, device=None, dtype=torch.float32,
+                          keep_aspect=False):
         """
         ComfyUI 原生张量入口，避免 PIL 往返。
 
         images: (B, H, W, 3) float，值域 [0,1]（ComfyUI 的 IMAGE 约定）
-        返回:   (B, 3, size_h, size_w)，已 ImageNet 标准化
+        keep_aspect: False 走官方路径，直接拉伸成正方形（与训练一致）；
+                     True 则按长边等比缩放后补边，保留原始比例。
+
+        返回 (pixel_values, meta):
+            pixel_values (B, 3, size_h, size_w)，已 ImageNet 标准化
+            meta         keep_aspect 时为有效区域 (nh, nw)，供后处理裁掉补边；否则 None
         """
         x = images.permute(0, 3, 1, 2).contiguous().float()  # BHWC -> BCHW
-        # 官方走 torchvision 的 resize，对张量默认开抗锯齿；缩小到 1024 时
-        # 是否抗锯齿对细边缘影响可见，这里保持一致
-        x = F.interpolate(
-            x, size=(self.size["height"], self.size["width"]),
-            mode="bilinear", align_corners=False, antialias=True,
-        )
+        th, tw = self.size["height"], self.size["width"]
+        meta = None
+
+        if keep_aspect:
+            _, _, H, W = x.shape
+            scale = min(th / H, tw / W)
+            nh = max(1, min(th, int(round(H * scale))))
+            nw = max(1, min(tw, int(round(W * scale))))
+            x = F.interpolate(x, size=(nh, nw), mode="bilinear",
+                              align_corners=False, antialias=True)
+            # 补边放在右/下侧，用边缘像素延展而非填黑：填黑会凭空造出一条
+            # 高对比直边，模型容易把它当成物体轮廓
+            if nh < th or nw < tw:
+                x = F.pad(x, (0, tw - nw, 0, th - nh), mode="replicate")
+            meta = (nh, nw)
+        else:
+            # 官方走 torchvision 的 resize，对张量默认开抗锯齿；缩小到 1024 时
+            # 是否抗锯齿对细边缘影响可见，这里保持一致
+            x = F.interpolate(x, size=(th, tw), mode="bilinear",
+                              align_corners=False, antialias=True)
+
         mean = torch.tensor(self.image_mean, dtype=torch.float32).view(1, 3, 1, 1)
         std = torch.tensor(self.image_std, dtype=torch.float32).view(1, 3, 1, 1)
         x = (x - mean) / std
-        return x.to(device=device, dtype=dtype) if device is not None \
+        x = x.to(device=device, dtype=dtype) if device is not None \
             else x.to(dtype=dtype)
+        return x, meta
 
     def __call__(self, images, return_tensors="pt", **kwargs):
         """PIL 入口，兼容官方 README 的用法：processor(image, return_tensors='pt')。"""
@@ -97,17 +119,21 @@ class BiRefNetImageProcessor:
             im = im.convert("RGB")
             arrs.append(np.asarray(im, dtype=np.float32) * self.rescale_factor)
         batch = torch.from_numpy(np.stack(arrs))  # (B,H,W,3) in [0,1]
-        return {"pixel_values": self.preprocess_tensor(batch)}
+        return {"pixel_values": self.preprocess_tensor(batch)[0]}
 
     # ---------------------------------------------------------------- 后处理
-    def post_process_alpha_matting(self, outputs, target_sizes=None):
+    def post_process_alpha_matting(self, outputs, target_sizes=None, crop=None):
         """
         原始 logits -> 每图 alpha（[0,1]，形状 (H, W)）。
 
         outputs: 含 "logits" 的 dict 或带 .logits 的对象，logits 形状 (B,1,H,W)
         target_sizes: [(h, w), ...]，逐图缩放回原尺寸
+        crop: 预处理若做过等比补边，这里传 (nh, nw) 把补出来的部分裁掉
         """
         logits = outputs["logits"] if isinstance(outputs, dict) else outputs.logits
+        if crop is not None:
+            nh, nw = crop
+            logits = logits[:, :, :nh, :nw]
         if target_sizes is not None and len(logits) != len(target_sizes):
             raise ValueError(
                 f"给了 {len(target_sizes)} 个目标尺寸，但批次里有 {len(logits)} 张图"
