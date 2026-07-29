@@ -1,0 +1,224 @@
+{
+  "id": "b5d81e46-2c93-4a7f-b0e1-6f4a8d2c9b37",
+  "revision": 0,
+  "last_node_id": 7,
+  "last_link_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [-1600, 400],
+      "size": [300, 330],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "图像",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1, 2]
+        },
+        {
+          "label": "遮罩",
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"],
+      "title": "① 加载原图"
+    },
+    {
+      "id": 2,
+      "type": "ImageWatermark",
+      "pos": [-1240, 400],
+      "size": [340, 300],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [3, 5]
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "ImageWatermark"
+      },
+      "widgets_values": [
+        "仅供参考 / SAMPLE\nRuinode",
+        "微软雅黑 (msyh)",
+        48,
+        30,
+        1,
+        2,
+        35,
+        "#FFFFFF"
+      ],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "② 满屏水印（常规：白色半透明）"
+    },
+    {
+      "id": 3,
+      "type": "ImageWatermark",
+      "pos": [-1240, 760],
+      "size": [340, 300],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [4]
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "ImageWatermark"
+      },
+      "widgets_values": [
+        "版权所有 © Ruinode",
+        "微软雅黑 (msyh)",
+        36,
+        45,
+        2.5,
+        6,
+        25,
+        "#FFD400"
+      ],
+      "title": "③ 对比用：高密度 / 45° / 黄色 / 宽字距"
+    },
+    {
+      "id": 4,
+      "type": "PreviewImage",
+      "pos": [-860, 400],
+      "size": [340, 340],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "常规水印效果"
+    },
+    {
+      "id": 5,
+      "type": "PreviewImage",
+      "pos": [-860, 780],
+      "size": [340, 340],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 4
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "高密度水印效果"
+    },
+    {
+      "id": 6,
+      "type": "SaveImage",
+      "pos": [-480, 400],
+      "size": [340, 340],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": ["watermark/output"],
+      "title": "保存成品"
+    },
+    {
+      "id": 7,
+      "type": "Note",
+      "pos": [-1600, 800],
+      "size": [660, 430],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "满屏文字水印 —— 八个参数怎么调\n\n【text 文案】支持多行，直接在框里换行即可。\n  多行会作为一个整体单元平铺，行内间距自动按字号的 25% 计算。\n\n【font 字体】列表来自 Ruinode/font 目录（与 Markdown 转图片节点共用）。\n  放入新的 ttf/otf/ttc 后刷新页面即可出现。列表里没有的字体会自动回退，\n  不会报错。\n\n【font_size 文字大小】像素值。它同时是密度的基准（见下）。\n\n【angle 旋转角度】-180~180 度。\n  实现上是「先平铺一张比对角线还大的画布，整体旋转后再从中心裁切」，\n  所以任何角度下四角都不会露白。\n\n【density 密度】0.1~5.0，越大越密。\n  控制的是水印之间的空隙：空隙 = 字号 × 2 ÷ density。\n  因此改字号时密度会跟着等比缩放，视觉疏密保持稳定。\n  · 0.4 左右 = 稀疏点缀\n  · 1.0 = 默认\n  · 2.5 以上 = 密集防盗（建议同时把 opacity 调低到 20~30）\n\n【letter_spacing 字间距】单条文案内相邻字的额外间距，可为负。\n  逐字符绘制实现，负值可以让字挤在一起。\n\n【opacity 透明程度】0 = 完全透明（原样返回，不做任何计算），100 = 不透明。\n  防盗建议 25~40：看得清但不影响读图。\n\n【color 颜色】四种写法都支持：\n  #FFFFFF ／ #FFF ／ 255,255,255 ／ white\n  认不出的写法会回退成灰色，不会报错。\n\n【小技巧】深色图用白色 + 35%，浅色图用黑色或深灰 + 25%，\n  彩色图用黄色 (#FFD400) 辨识度最高 —— 上面两个节点就是这个思路的对比。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 1, 0, 3, 0, "IMAGE"],
+    [3, 2, 0, 4, 0, "IMAGE"],
+    [4, 3, 0, 5, 0, "IMAGE"],
+    [5, 2, 0, 6, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8,
+      "offset": [1800, -300]
+    }
+  },
+  "version": 0.4
+}

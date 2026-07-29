@@ -1,0 +1,275 @@
+{
+  "id": "3a7e5c92-1f4d-4b60-8e2a-9c5d3f7b1e04",
+  "revision": 0,
+  "last_node_id": 9,
+  "last_link_id": 8,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [-1600, 400],
+      "size": [300, 330],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "图像",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1, 2]
+        },
+        {
+          "label": "遮罩",
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"],
+      "title": "① 加载原图"
+    },
+    {
+      "id": 2,
+      "type": "RuiFeyNobg",
+      "pos": [-1240, 400],
+      "size": [320, 170],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "alpha",
+          "type": "MASK",
+          "links": [3, 4]
+        },
+        {
+          "name": "cutout",
+          "type": "IMAGE",
+          "links": [5]
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiFeyNobg"
+      },
+      "widgets_values": ["FeyNobg", 1024, "fp16", "auto", false],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "② FeyNobg 抠图（全自动，无需提示）"
+    },
+    {
+      "id": 3,
+      "type": "MaskPreview",
+      "pos": [-860, 400],
+      "size": [280, 300],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "遮罩",
+          "name": "mask",
+          "type": "MASK",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "MaskPreview"
+      },
+      "widgets_values": [],
+      "title": "alpha 遮罩"
+    },
+    {
+      "id": 4,
+      "type": "InvertMask",
+      "pos": [-860, 760],
+      "size": [200, 26],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "links": [6]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "InvertMask"
+      },
+      "widgets_values": [],
+      "title": "反相（JoinImageWithAlpha 内部会再反一次）"
+    },
+    {
+      "id": 5,
+      "type": "JoinImageWithAlpha",
+      "pos": [-860, 840],
+      "size": [220, 46],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        },
+        {
+          "name": "alpha",
+          "type": "MASK",
+          "link": 6
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [7, 8]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "JoinImageWithAlpha"
+      },
+      "widgets_values": [],
+      "title": "合成透明背景 RGBA"
+    },
+    {
+      "id": 6,
+      "type": "PreviewImage",
+      "pos": [-540, 400],
+      "size": [320, 300],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "cutout（黑底预览）"
+    },
+    {
+      "id": 7,
+      "type": "PreviewImage",
+      "pos": [-540, 760],
+      "size": [320, 300],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 7
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "透明背景成品（RGBA）"
+    },
+    {
+      "id": 8,
+      "type": "SaveImage",
+      "pos": [-180, 760],
+      "size": [320, 300],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 8
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": ["FeyNobg/cutout"],
+      "title": "保存透明 PNG"
+    },
+    {
+      "id": 9,
+      "type": "Note",
+      "pos": [-1600, 800],
+      "size": [660, 420],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "FeyNobg 抠图 —— 使用要点\n\n【模型】首次运行会自动下载到 ComfyUI/models/nobg/FeyNobg（约 1.05GB）。\n  也可手动下载 https://huggingface.co/feyninc/FeyNobg 的三个文件放进去：\n  config.json / preprocessor_config.json / model.safetensors\n\n【precision】推荐 fp16\n  实测 fp16 与 fp32 输出完全一致（同图 alpha 均值都是 0.657），\n  但 fp16 显存减半、速度快数倍。默认给 fp32 只是为老显卡留退路。\n\n【resolution】保持 1024\n  这是模型原生训练分辨率。降到 768 差别很小（前景占比 0.656 vs 0.659）\n  且更省显存；调高不一定更好，可能出现结构断裂。\n\n【适用范围】画面主体明确时效果最好\n  实测发丝、飘带、细链条等高频细节都能完整分离，边缘是自然的半透明过渡。\n  但它是「找出画面主体」的模型：给一张没有明确主体的图（例如 UI 截图、\n  纯风景），输出接近全黑是正常反应，不是故障。\n\n【与 SDMatte 的分工】\n  · FeyNobg：全自动、快，适合批量去背景 —— 主体明确时首选\n  · SDMatte：需要框/掩码提示指定目标，适合画面里有多个主体、只抠其中一个\n\n【透明 PNG】cutout 输出是黑底 RGB。要透明背景需走下面这条链路：\n  alpha → InvertMask → JoinImageWithAlpha（该节点内部会再反一次，故须先反相）\n\n【invert_mask】节点自带的反转开关只影响 alpha 本身，\n  与上面为 JoinImageWithAlpha 做的反相是两回事，别混用。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 1, 0, 5, 0, "IMAGE"],
+    [3, 2, 0, 3, 0, "MASK"],
+    [4, 2, 0, 4, 0, "MASK"],
+    [5, 2, 1, 6, 0, "IMAGE"],
+    [6, 4, 0, 5, 1, "MASK"],
+    [7, 5, 0, 7, 0, "IMAGE"],
+    [8, 5, 0, 8, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.8,
+      "offset": [1800, -300]
+    }
+  },
+  "version": 0.4
+}
