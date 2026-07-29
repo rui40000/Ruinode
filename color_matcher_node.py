@@ -30,10 +30,26 @@ class ColorMatcherNode:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "reference_image": ("IMAGE",),
-                "moving_image": ("IMAGE",),
-                "match_method": (["histogram", "mean_std", "none"], {"default": "histogram"}),
-                "blend_factor": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "reference_image": ("IMAGE", {
+                    "tooltip": "参考图：提供目标色调，本身不会被改动。"
+                }),
+                "moving_image": ("IMAGE", {
+                    "tooltip": "待校色图：它的颜色分布会被改造成参考图的样子。"
+                }),
+                "match_method": (["histogram", "mean_std", "none"], {
+                    "default": "histogram",
+                    "tooltip": "匹配算法：\n"
+                               "histogram = 逐通道直方图匹配，色调贴合最紧，\n"
+                               "  但两图内容差异大时容易出偏色\n"
+                               "mean_std = 只对齐均值与标准差，效果温和、不易翻车\n"
+                               "none = 不做匹配，仅用于对照原图"
+                }),
+                "blend_factor": ("FLOAT", {
+                    "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01,
+                    "tooltip": "匹配强度：结果在原图与完全匹配之间线性混合。\n"
+                               "0 = 保持原样，1 = 完全套用参考图色调。\n"
+                               "匹配过头显得失真时降到 0.5~0.8 往往更自然。"
+                }),
             }
         }
 

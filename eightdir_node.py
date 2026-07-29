@@ -93,6 +93,41 @@ def _drop_fragments(alpha, ratio):
     return np.where(keep[lab], alpha, 0.0).astype(np.float32)
 
 
+def _assign_blocks(alpha_full, ybnd, xbnd, cols, frag_ratio):
+    """
+    全图连通标记 + 按质心把每块归属到格子。
+
+    这样格子只负责回答「这是哪个方向」，角色的实际范围由它自己的连通块决定，
+    因此**角色超出格子边界也不会被切**（原本严格等分会把探出去的脚、
+    飘起的斗篷直接截断）。归属按质心判定，每块只属于一个格子，
+    相邻角色不会被重复计入。
+
+    返回 (lab, {cell_id: [块标签...]})；scipy 不可用时返回 (None, None)。
+    """
+    if not _HAS_SCIPY:
+        return None, None
+    solid = alpha_full > 0.1
+    if not solid.any():
+        return None, {}
+    lab, n = ndi.label(solid)
+    if n == 0:
+        return lab, {}
+    areas = np.bincount(lab.ravel())
+    areas[0] = 0
+    big = areas.max()
+    cents = ndi.center_of_mass(solid, lab, np.arange(1, n + 1))
+    rows = len(ybnd) - 1
+    out = {}
+    for i in range(1, n + 1):
+        if frag_ratio > 0 and areas[i] < big * float(frag_ratio):
+            continue                                   # 碎片，丢弃
+        cy, cx = cents[i - 1]
+        r = min(rows - 1, max(0, int(np.searchsorted(ybnd, cy, "right") - 1)))
+        c = min(cols - 1, max(0, int(np.searchsorted(xbnd, cx, "right") - 1)))
+        out.setdefault(r * cols + c, []).append(i)
+    return lab, out
+
+
 def _bbox(alpha, thr=0.02):
     """内容包围盒 (y0,y1,x0,x1)，无内容时返回 None。"""
     m = alpha > thr
@@ -173,6 +208,15 @@ class RuiEightDirSplit:
                                "切进本格，既难看又会撑大自动裁剪的范围。\n"
                                "0 = 不清理；与身体相连的道具不会被误删。"
                 }),
+                "expand_beyond_cell": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "允许角色超出格子边界（强烈建议开启）。\n"
+                               "关闭时按格子严格切分，角色只要探出格线就会被切断\n"
+                               "——最常见的是脚、飘起的斗篷和手杖被削掉一截。\n"
+                               "开启后格子只用来判定「这是哪个方向」，实际范围由角色\n"
+                               "自身的连通区域决定，因此不会被切；按质心归属，\n"
+                               "相邻角色也不会被卷进来。"
+                }),
                 "auto_crop": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "按内容裁掉多余空白。\n"
@@ -203,7 +247,8 @@ class RuiEightDirSplit:
 
     def split(self, images, grid_cols, grid_rows, empty_cells,
               direction_names, bg_mode, bg_threshold, edge_softness,
-              fragment_threshold, auto_crop, crop_padding, masks=None):
+              fragment_threshold, expand_beyond_cell, auto_crop, crop_padding,
+              masks=None):
         mode = _BG_MODES.get(bg_mode, "white")
         B, H, W, C = images.shape
         cols, rows = int(grid_cols), int(grid_rows)
@@ -234,49 +279,110 @@ class RuiEightDirSplit:
         ybnd = [int(round(r * H / rows)) for r in range(rows + 1)]
         xbnd = [int(round(c * W / cols)) for c in range(cols + 1)]
 
-        # ---- 第一遍：切格 + 生成 alpha，同时累计每个方向的内容包围盒 ----
-        per_dir = [[] for _ in range(n_dir)]
-        boxes = [None] * n_dir
-        for b in range(B):
+        pad = int(crop_padding)
+        use_expand = bool(expand_beyond_cell) and mode != "none" and _HAS_SCIPY
+
+        def frame_alpha(b):
+            if mode == "white":
+                return _white_to_alpha(rgb_all[b], bg_threshold, edge_softness)
+            if mode == "keep" and a_in is not None:
+                return a_in[b]
+            return np.ones((H, W), dtype=np.float32)
+
+        outs, notes = [], []
+
+        if use_expand:
+            # ===== 内容自适应：格子只定方向，范围由角色自身的连通块决定 =====
+            # 第一遍只求包围盒（全图坐标），不留像素，避免整段序列驻留内存
+            boxes = [None] * n_dir
+            for b in range(B):
+                lab, groups = _assign_blocks(frame_alpha(b), ybnd, xbnd,
+                                             cols, fragment_threshold)
+                if lab is None:
+                    continue
+                for di, cid in enumerate(cell_ids):
+                    blk = groups.get(cid)
+                    if not blk:
+                        continue
+                    bb = _bbox(np.isin(lab, blk).astype(np.float32), 0.5)
+                    if bb is None:
+                        continue
+                    boxes[di] = bb if boxes[di] is None else (
+                        min(boxes[di][0], bb[0]), max(boxes[di][1], bb[1]),
+                        min(boxes[di][2], bb[2]), max(boxes[di][3], bb[3]))
+
+            # 没有 auto_crop 时退回该格的格线范围，仍允许块超界的像素带出来
+            final = []
             for di, cid in enumerate(cell_ids):
                 r, c = divmod(cid, cols)
-                y0, y1, x0, x1 = ybnd[r], ybnd[r + 1], xbnd[c], xbnd[c + 1]
-                rgb = rgb_all[b, y0:y1, x0:x1]
-                if mode == "white":
-                    alpha = _white_to_alpha(rgb, bg_threshold, edge_softness)
-                elif mode == "keep" and a_in is not None:
-                    alpha = a_in[b, y0:y1, x0:x1]
+                if auto_crop and boxes[di] is not None:
+                    y0, y1, x0, x1 = boxes[di]
+                    y0 = max(0, y0 - pad); x0 = max(0, x0 - pad)
+                    y1 = min(H, y1 + pad); x1 = min(W, x1 + pad)
+                elif boxes[di] is not None:
+                    y0, y1, x0, x1 = (min(ybnd[r], boxes[di][0]),
+                                      max(ybnd[r + 1], boxes[di][1]),
+                                      min(xbnd[c], boxes[di][2]),
+                                      max(xbnd[c + 1], boxes[di][3]))
                 else:
-                    alpha = np.ones(rgb.shape[:2], dtype=np.float32)
-                if mode != "none":
-                    alpha = _drop_fragments(alpha, fragment_threshold)
-                per_dir[di].append((rgb, alpha))
-                if auto_crop:
-                    bb = _bbox(alpha)
-                    if bb is not None:
-                        boxes[di] = bb if boxes[di] is None else (
-                            min(boxes[di][0], bb[0]), max(boxes[di][1], bb[1]),
-                            min(boxes[di][2], bb[2]), max(boxes[di][3], bb[3]))
+                    y0, y1, x0, x1 = ybnd[r], ybnd[r + 1], xbnd[c], xbnd[c + 1]
+                final.append((y0, y1, x0, x1))
+                outs.append(np.zeros((B, y1 - y0, x1 - x0, 4), dtype=np.float32))
 
-        # ---- 第二遍：按并集包围盒统一裁剪并打包 ----
-        outs, notes = [], []
-        pad = int(crop_padding)
-        for di in range(n_dir):
-            frames = per_dir[di]
-            ch, cw = frames[0][0].shape[:2]
-            if auto_crop and boxes[di] is not None:
-                y0, y1, x0, x1 = boxes[di]
-                y0 = max(0, y0 - pad); x0 = max(0, x0 - pad)
-                y1 = min(ch, y1 + pad); x1 = min(cw, x1 + pad)
-            else:
-                y0, y1, x0, x1 = 0, ch, 0, cw
-            stack = np.empty((len(frames), y1 - y0, x1 - x0, 4), dtype=np.float32)
-            for fi, (rgb, alpha) in enumerate(frames):
-                stack[fi, ..., :3] = rgb[y0:y1, x0:x1]
-                stack[fi, ..., 3] = alpha[y0:y1, x0:x1]
-            outs.append(torch.from_numpy(stack))
-            notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]} "
-                         f"{x1 - x0}×{y1 - y0}")
+            # 第二遍按并集框提取；只保留归属本格的连通块，邻居不会混进来
+            for b in range(B):
+                af = frame_alpha(b)
+                lab, groups = _assign_blocks(af, ybnd, xbnd, cols, fragment_threshold)
+                for di, cid in enumerate(cell_ids):
+                    y0, y1, x0, x1 = final[di]
+                    outs[di][b, ..., :3] = rgb_all[b, y0:y1, x0:x1]
+                    blk = groups.get(cid) if groups else None
+                    if not blk:
+                        continue
+                    m = np.isin(lab[y0:y1, x0:x1], blk)
+                    outs[di][b, ..., 3] = af[y0:y1, x0:x1] * m
+
+            for di in range(n_dir):
+                y0, y1, x0, x1 = final[di]
+                notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]} "
+                             f"{x1 - x0}×{y1 - y0}")
+                outs[di] = torch.from_numpy(outs[di])
+        else:
+            # ===== 严格按格线切分（角色探出格线会被截断）=====
+            per_dir = [[] for _ in range(n_dir)]
+            boxes = [None] * n_dir
+            for b in range(B):
+                af = frame_alpha(b)
+                for di, cid in enumerate(cell_ids):
+                    r, c = divmod(cid, cols)
+                    y0, y1, x0, x1 = ybnd[r], ybnd[r + 1], xbnd[c], xbnd[c + 1]
+                    rgb = rgb_all[b, y0:y1, x0:x1]
+                    alpha = af[y0:y1, x0:x1]
+                    if mode != "none":
+                        alpha = _drop_fragments(alpha, fragment_threshold)
+                    per_dir[di].append((rgb, alpha))
+                    if auto_crop:
+                        bb = _bbox(alpha)
+                        if bb is not None:
+                            boxes[di] = bb if boxes[di] is None else (
+                                min(boxes[di][0], bb[0]), max(boxes[di][1], bb[1]),
+                                min(boxes[di][2], bb[2]), max(boxes[di][3], bb[3]))
+            for di in range(n_dir):
+                frames = per_dir[di]
+                ch, cw = frames[0][0].shape[:2]
+                if auto_crop and boxes[di] is not None:
+                    y0, y1, x0, x1 = boxes[di]
+                    y0 = max(0, y0 - pad); x0 = max(0, x0 - pad)
+                    y1 = min(ch, y1 + pad); x1 = min(cw, x1 + pad)
+                else:
+                    y0, y1, x0, x1 = 0, ch, 0, cw
+                stack = np.empty((len(frames), y1 - y0, x1 - x0, 4), dtype=np.float32)
+                for fi, (rgb, alpha) in enumerate(frames):
+                    stack[fi, ..., :3] = rgb[y0:y1, x0:x1]
+                    stack[fi, ..., 3] = alpha[y0:y1, x0:x1]
+                outs.append(torch.from_numpy(stack))
+                notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]} "
+                             f"{x1 - x0}×{y1 - y0}")
 
         info = (f"输入 {B} 帧 {W}×{H} → {cols}×{rows} 网格，"
                 f"空格 {sorted(empties) if empties else '无'}，"

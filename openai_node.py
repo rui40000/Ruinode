@@ -78,66 +78,99 @@ class OpenAINode:
             "required": {
                 # 下拉框只含纯英文单词，不含 :// ，杜绝被前端吞掉
                 "protocol": (["https", "http"], {
-                    "default": "https"
+                    "default": "https",
+                    "tooltip": "接口协议。之所以单独做成下拉而不写进地址栏：\n"
+                               "ComfyUI 前端会吞掉文本框里的 \"://\" 片段，\n"
+                               "协议只能由后端拼接。"
                 }),
                 # 默认值不含任何协议前缀，杜绝被前端吞掉
                 "api_url": ("STRING", {
                     "default": "api.openai.com/v1/chat/completions",
                     "multiline": False,
+                    "tooltip": "接口地址，**不要带 http:// 或 https://**（协议见上方下拉）。\n"
+                               "只填域名和路径，例如 api.openai.com/v1/chat/completions。\n"
+                               "第三方中转填对应的域名即可。"
                 }),
                 "api_key": ("STRING", {
                     "default": "",
                     "multiline": False,
+                    "tooltip": "API 密钥。\n"
+                               "⚠ 工作流会连同此值一起保存，分享 json 前记得清空。"
                 }),
                 "model": ("STRING", {
                     "default": "gpt-4o",
                     "multiline": False,
+                    "tooltip": "模型名，按服务商文档填写。\n"
+                               "要传图就必须选支持视觉的型号，否则图会被忽略或直接报错。"
                 }),
                 "system_prompt": ("STRING", {
                     "default": "You are a helpful assistant.",
                     "multiline": True,
+                    "tooltip": "系统提示词：设定模型的角色与总体行为准则。\n"
+                               "输出格式要求（如「只返回 JSON」）写在这里比写在用户\n"
+                               "提示词里更稳定。"
                 }),
                 "user_prompt": ("STRING", {
                     "default": "",
                     "multiline": True,
+                    "tooltip": "用户提示词：这一次具体要模型做什么。\n"
+                               "接了图像时，在这里描述针对图像的任务。"
                 }),
                 "seed": ("INT", {
                     "default": 0,
                     "min": 0,
                     "max": 0xffffffffffffffff,
+                    "tooltip": "随机种子。多数服务商并不真正支持复现，\n"
+                               "这里主要用于强制节点重新执行（改了它就不会走缓存）。"
                 }),
             },
             "optional": {
-                "image_1": ("IMAGE",),
-                "image_2": ("IMAGE",),
-                "image_3": ("IMAGE",),
-                "image_4": ("IMAGE",),
-                "image_5": ("IMAGE",),
-                "image_6": ("IMAGE",),
+                "image_1": ("IMAGE", {
+                    "tooltip": "要一并发给模型的图像 1（需模型支持视觉）。\n"
+                               "会按下方的最大边长压缩后转 base64 提交。"
+                }),
+                "image_2": ("IMAGE", {"tooltip": "图像 2。"}),
+                "image_3": ("IMAGE", {"tooltip": "图像 3。"}),
+                "image_4": ("IMAGE", {"tooltip": "图像 4。"}),
+                "image_5": ("IMAGE", {"tooltip": "图像 5。"}),
+                "image_6": ("IMAGE", {"tooltip": "图像 6。图越多越贵、越慢。"}),
                 "temperature": ("FLOAT", {
                     "default": 0.3,
                     "min": 0.0,
                     "max": 2.0,
                     "step": 0.1,
+                    "tooltip": "采样温度：越低越稳定保守，越高越发散。\n"
+                               "要结构化/可解析的输出用 0~0.3；\n"
+                               "要创意文案用 0.7~1.0。超过 1.2 常出现胡言乱语。"
                 }),
                 "max_tokens": ("INT", {
                     "default": 500,
                     "min": 1,
                     "max": 8192,
+                    "tooltip": "回复的最大长度上限。\n"
+                               "设小了会把回答从中间截断，长文任务记得调大。"
                 }),
                 "detail": (["low", "high", "auto"], {
                     "default": "auto",
+                    "tooltip": "图像细节级别（OpenAI 视觉参数）：\n"
+                               "low 便宜快速，只看大致内容；\n"
+                               "high 会切块细看，认小字/细节更准但更贵；\n"
+                               "auto 由服务端决定。"
                 }),
                 "image_max_size": ("INT", {
                     "default": 1024,
                     "min": 256,
                     "max": 4096,
                     "step": 64,
+                    "tooltip": "上传前把图缩放到的最大边长。\n"
+                               "调小可显著省钱提速，但小字与细节会看不清。"
                 }),
                 # 代理地址也不带协议前缀，只填 IP:端口 即可
                 "proxy_url": ("STRING", {
                     "default": "",
                     "multiline": False,
+                    "tooltip": "HTTP 代理，**同样不要带协议前缀**，只填 IP:端口，\n"
+                               "例如 127.0.0.1:7890。留空表示直连。"
                 }),
             },
         }

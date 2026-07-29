@@ -14,7 +14,10 @@ class LoadImageByPathNode:
             "required": {
                 "image_path": ("STRING", {
                     "default": "E:\\ComfyUIModels\\input\\10\\1.png",
-                    "multiline": False
+                    "multiline": False,
+                    "tooltip": "图像文件的完整路径，可指向 ComfyUI 目录之外的任意位置。\n"
+                               "适合批量处理散落在各处的素材，省去先拷进 input 目录。\n"
+                               "Windows 路径直接粘贴即可，反斜杠无需转义。"
                 }),
             },
         }

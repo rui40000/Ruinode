@@ -80,7 +80,10 @@ class UTF8ConverterNode:
                 "input_text": ("STRING", {
                     "multiline": True,
                     "default": "",
-                    "placeholder": "输入文本 / Input Text"
+                    "placeholder": "输入文本 / Input Text",
+                    "tooltip": "待转码的文本。用于把从各处复制来的乱码文本\n"
+                               "（GBK/UTF-16 等被误读的内容）修正为正常 UTF-8。\n"
+                               "若下方填了文件路径，则以文件内容为准，本框会被忽略。"
                 }),
                 "remove_emoji": ("BOOLEAN", {
                     "default": True,
@@ -93,7 +96,10 @@ class UTF8ConverterNode:
                 "input_file": ("STRING", {
                     "multiline": False,
                     "default": "",
-                    "placeholder": "文件路径 / File Path (优先读取 / Overrides input_text)"
+                    "placeholder": "文件路径 / File Path (优先读取 / Overrides input_text)",
+                    "tooltip": "文本文件路径。填了它就优先读文件，忽略上面的输入框。\n"
+                               "会依次尝试 UTF-8 → UTF-16(带BOM) → GB18030 解码，\n"
+                               "都失败则忽略非法字节强行读出，尽量不让整个文件报废。"
                 }),
             }
         }

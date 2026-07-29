@@ -11,12 +11,18 @@ class SaturationNode:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "要调整饱和度的图像。"
+                }),
                 "saturation": ("FLOAT", {
                     "default": 1.0,
                     "min": 0.0,
                     "max": 5.0,
-                    "step": 0.1
+                    "step": 0.1,
+                    "tooltip": "饱和度系数：\n"
+                               "0.0 = 完全去色（黑白）\n"
+                               "1.0 = 保持原样\n"
+                               "1.0~2.0 = 色彩逐渐浓郁，超过 2.0 容易溢出失真"
                 }),
             },
         }

@@ -66,7 +66,10 @@ class RuiPixelate:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "待像素化的图像。批量输入时若各图比例不同，\n"
+                               "会统一到首张的输出尺寸（ComfyUI 的 IMAGE 必须同形状）。"
+                }),
                 "mode": (_MODES, {
                     "default": "按目标宽度",
                     "tooltip": "按目标宽度：普通图转像素画，直接给输出宽度\n"
@@ -132,7 +135,12 @@ class RuiPixelate:
                     "tooltip": "遮罩二值化阈值，高于它算不透明。\n"
                                "设为 0 则保留灰度遮罩（不二值化）。"
                 }),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
+                "seed": ("INT", {
+                    "default": 0, "min": 0, "max": 0xFFFFFFFF,
+                    "tooltip": "随机种子。影响 k-means 调色板的初始化与随机噪声抖动；\n"
+                               "同一张图换种子会得到略有差异的配色，可多试几个挑顺眼的。\n"
+                               "固定调色板与 Bayer 抖动不受它影响。"
+                }),
             },
         }
 

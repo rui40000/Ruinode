@@ -168,7 +168,11 @@ class RuiSDMatteLoader:
                     "tooltip": "官方测试配置为 fp32（amp.enabled=False）。\n"
                                "fp16 省显存但 SD 2.1 的 VAE 在半精度下容易溢出，可能出现黑图或噪点。"
                 }),
-                "device": (["auto", "cpu"], {"default": "auto"}),
+                "device": (["auto", "cpu"], {
+                    "default": "auto",
+                    "tooltip": "auto = 有显卡就用显卡。\n"
+                               "SDMatte 体量大，cpu 推理会慢到不实用，仅作兜底。"
+                }),
                 "attention_slicing": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "分片计算注意力。1024 分辨率下显存峰值从约 15.5GB 降到 9.1GB，\n"
@@ -208,8 +212,14 @@ class RuiSDMatte:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "sdmatte_model": ("SDMATTE_MODEL",),
-                "image": ("IMAGE",),
+                "sdmatte_model": ("SDMATTE_MODEL", {
+                    "tooltip": "由「SDMatte 加载器」输出的模型。\n"
+                               "加载器有缓存，多个抠图节点可共用同一个加载器。"
+                }),
+                "image": ("IMAGE", {
+                    "tooltip": "待抠图的原图。RGBA 输入会自动丢弃 alpha 只取 RGB\n"
+                               "（VAE 编码器只收 3 通道，多出的 alpha 不能当颜色喂进去）。"
+                }),
                 "mask": ("MASK", {
                     "tooltip": "指示要抠哪个目标的提示掩码，不必精确，粗略覆盖主体即可。"
                 }),
@@ -250,7 +260,12 @@ class RuiSDMatte:
                                "再逐像素取最大值合成提示图 —— 即每个点的影响半径。\n"
                                "官方训练用 25，测试期用 25+10=35，故默认 35。"
                 }),
-                "seed": ("INT", {"default": 0, "min": 0, "max": 0xFFFFFFFF}),
+                "seed": ("INT", {
+                    "default": 0, "min": 0, "max": 0xFFFFFFFF,
+                    "tooltip": "随机种子，仅在 prompt_type=point_mask 时真正起作用\n"
+                               "（决定在提示区域里随机取哪 10 个点）。\n"
+                               "其余提示类型下改它不会改变结果。"
+                }),
             },
         }
 

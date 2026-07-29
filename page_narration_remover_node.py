@@ -15,7 +15,11 @@ class PageNarrationRemoverNode:
             "required": {
                 "input_text": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "原始文本（多行）。节点会删掉形如\n"
+                               "  页面旁白：\"……\"\n"
+                               "这样单独成行的旁白，其余内容原样保留。\n"
+                               "只处理独占一行的旁白，行内夹带的不会被误删。"
                 }),
             },
         }

@@ -14,7 +14,12 @@ class LoadImageWithNameNode:
         input_dir = folder_paths.get_input_directory()
         files = [f for f in os.listdir(input_dir) if os.path.isfile(os.path.join(input_dir, f))]
         return {"required":
-                    {"image": (sorted(files), {"image_upload": True})},
+                    {"image": (sorted(files), {
+                        "image_upload": True,
+                        "tooltip": "从 input 目录选择图像，或点下方按钮上传。\n"
+                                   "与原生加载节点的区别：额外输出不带后缀的文件名，\n"
+                                   "便于让输出文件沿用原名，批量处理时不会张冠李戴。"
+                    })},
                 }
 
     CATEGORY = "Rui-Node🐶/文件存储与加载📁"

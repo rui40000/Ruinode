@@ -89,28 +89,57 @@ class ImageWatermarkNode:
             else (font_labels[0] if font_labels else "")
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "要打水印的图像，支持批量，每张都会独立处理。"
+                }),
                 "text": ("STRING", {
                     "default": "仅供参考 / SAMPLE",
                     "multiline": True,
+                    "tooltip": "水印文案，支持多行（直接在框里换行）。\n"
+                               "多行会作为一个整体单元平铺，行内间距按字号的 25% 自动计算。"
                 }),
-                "font": (font_labels, {"default": default_font}),
+                "font": (font_labels, {
+                    "default": default_font,
+                    "tooltip": "字体，列表来自 Ruinode/font 目录，与 Markdown 转图片节点共用。\n"
+                               "放入新的 ttf/otf/ttc 后刷新页面即可出现。\n"
+                               "列表里没有的字体会自动回退，不会报错。"
+                }),
                 "font_size": ("INT", {
                     "default": 48, "min": 8, "max": 500, "step": 1,
+                    "tooltip": "文字大小（像素）。它同时是密度的基准——\n"
+                               "改字号时水印疏密会等比缩放，视觉观感保持稳定。"
                 }),
                 "angle": ("FLOAT", {
                     "default": 30.0, "min": -180.0, "max": 180.0, "step": 1.0,
+                    "tooltip": "水印整体旋转角度（度）。\n"
+                               "实现上先在超过对角线的画布上平铺、整体旋转后再从中心裁切，\n"
+                               "所以任何角度下四角都不会露白。"
                 }),
                 "density": ("FLOAT", {
                     "default": 1.0, "min": 0.1, "max": 5.0, "step": 0.05,
+                    "tooltip": "水印密度，越大越密。控制的是水印之间的空隙：\n"
+                               "空隙 = 字号 × 2 ÷ 密度。\n"
+                               "0.4 左右 = 稀疏点缀；1.0 = 默认；\n"
+                               "2.5 以上 = 密集防盗（建议同时把透明度降到 20~30）"
                 }),
                 "letter_spacing": ("INT", {
                     "default": 0, "min": -20, "max": 200, "step": 1,
+                    "tooltip": "字间距：单条文案内相邻字符的额外间距（像素）。\n"
+                               "逐字符绘制实现，可为负值让字挤在一起。"
                 }),
                 "opacity": ("FLOAT", {
                     "default": 35.0, "min": 0.0, "max": 100.0, "step": 1.0,
+                    "tooltip": "水印透明程度：0 = 完全透明（原样返回，不做任何计算），\n"
+                               "100 = 完全不透明。\n"
+                               "防盗建议 25~40：看得清但不影响读图。"
                 }),
-                "color": ("STRING", {"default": "#FFFFFF", "multiline": False}),
+                "color": ("STRING", {
+                    "default": "#FFFFFF", "multiline": False,
+                    "tooltip": "水印颜色，四种写法都支持：\n"
+                               "#FFFFFF ／ #FFF ／ 255,255,255 ／ white\n"
+                               "认不出的写法会回退成灰色，不会报错。\n"
+                               "深色图用白色，浅色图用黑或深灰，彩色图用黄色最醒目。"
+                }),
             },
         }
 

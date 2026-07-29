@@ -22,6 +22,11 @@ class RuiTextBoxNode:
                     "multiline": True,
                     # 关闭动态提示词处理，杜绝 {a|b}、通配符等被前端改写
                     "dynamicPrompts": False,
+                    "tooltip": "多行文本，一字不动地原样输出。\n"
+                               "不删注释行、不做动态提示词/通配符/token 替换。\n\n"
+                               "用来替代 WAS 的「Text Multiline」——那个节点会把\n"
+                               "「#」开头的行当注释删掉，喂 Markdown 时标题会凭空消失。\n"
+                               "承载 Markdown、代码等格式敏感的文本请用本节点。"
                 }),
             },
         }

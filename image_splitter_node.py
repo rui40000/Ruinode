@@ -12,7 +12,11 @@ class SpriteSplitter:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "图像": ("IMAGE",),
+                "图像": ("IMAGE", {
+                    "tooltip": "待拆分的合图，需自带透明通道（背景为透明）。\n"
+                               "节点按 alpha 的连通区域找出各个独立素材并逐个裁出。\n"
+                               "白底图请先接抠图节点转成透明再进来，否则整图会被当成一块。"
+                }),
                 "最小面积过滤（像素数）": ("INT", {
                     "default": 100,
                     "min": 1,
@@ -162,7 +166,11 @@ class SpriteSplitterRGBA:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "图像": ("IMAGE",),
+                "图像": ("IMAGE", {
+                    "tooltip": "待拆分的合图，需自带透明通道（背景为透明）。\n"
+                               "节点按 alpha 的连通区域找出各个独立素材并逐个裁出。\n"
+                               "白底图请先接抠图节点转成透明再进来，否则整图会被当成一块。"
+                }),
                 "最小面积过滤（像素数）": ("INT", {
                     "default": 100, "min": 1, "max": 50000, "step": 1,
                     "tooltip": "最小面积过滤。"
@@ -173,6 +181,10 @@ class SpriteSplitterRGBA:
                 }),
                 "排序方式": (["从左到右-从上到下", "从上到下-从左到右", "面积从大到小", "面积从小到大"],{
                     "default": "从左到右-从上到下",
+                    "tooltip": "输出顺序。\n"
+                               "⚠ 逐帧处理动画序列时慎用：素材位置一旦浮动跨过内部\n"
+                               "行/列分界，顺序就会在帧间改变。那种场景请改用\n"
+                               "「八方向序列拆分」节点（按固定网格定位，顺序恒定）。"
                 }),
                 "seed": ("INT", {
                     "default": 0, "min": 0, "max": 0xffffffffffffffff,

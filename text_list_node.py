@@ -12,25 +12,31 @@ class TextListNode:
             "required": {
                 "text1": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "第 1 段文本。列表按 text1~text5 的顺序组织，\n"
+                               "空白段会被自动跳过，不会在列表里留空位。"
                 }),
             },
             "optional": {
                 "text2": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "第 2 段文本，留空则跳过。"
                 }),
                 "text3": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "第 3 段文本，留空则跳过。"
                 }),
                 "text4": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "第 4 段文本，留空则跳过。"
                 }),
                 "text5": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "第 5 段文本，留空则跳过。"
                 }),
             }
         }

@@ -11,7 +11,9 @@ class ShotSplitterNode:
             "required": {
                 "input_text": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "多分镜脚本原文。节点会识别「镜头1 / 分镜2 / Shot 3」\n"
+                               "这类编号标记，把整段脚本拆成一条条独立的分镜描述。"
                 }),
             },
             "optional": {
@@ -20,12 +22,16 @@ class ShotSplitterNode:
                     "min": 0,
                     "max": 100,
                     "step": 1,
+                    "tooltip": "从第几号镜头开始取，0 表示从头开始。\n"
+                               "用于跳过前面已经出过图的镜头。"
                 }),
                 "shot_count": ("INT", {
                     "default": 0,
                     "min": 0,
                     "max": 100,
                     "step": 1,
+                    "tooltip": "取多少个镜头，0 表示一直取到结尾。\n"
+                               "与上面的起始号配合，可以分批处理长脚本。"
                 }),
             },
         }

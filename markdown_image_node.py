@@ -82,29 +82,59 @@ class MarkdownToImageNode:
         font_labels = list(scan_fonts().keys())
         default_font = DEFAULT_FONT_LABEL if DEFAULT_FONT_LABEL in font_labels \
             else font_labels[0]
-        size_opt = {"default": "auto", "multiline": False}
+        def _sz(desc):
+            """auto 类参数：填 auto 走自动推算，填数值则强制指定。"""
+            return {"default": "auto", "multiline": False,
+                    "tooltip": desc + "\n填 auto 由节点自动推算，填数值则强制指定。"}
+
         return {
             "required": {
-                "markdown": ("STRING", {"default": _DEMO_MD, "multiline": True}),
+                "markdown": ("STRING", {
+                    "default": _DEMO_MD, "multiline": True,
+                    "tooltip": "Markdown 原文。支持标题、粗斜体、删除线、行内代码、\n"
+                               "代码块、引用、列表、任务清单、表格、链接与彩色 Emoji。\n"
+                               "⚠ 别用 WAS 的「Text Multiline」喂本节点——它会把 # 开头的\n"
+                               "标题行当注释删掉。请用本仓库的「多行文本框(原样输出)」。"
+                }),
                 "size_preset": (list(_SIZE_PRESETS.keys()), {
                     "default": "1080×1440 竖版 3:4",
+                    "tooltip": "输出尺寸预设。选 custom 时才使用下方的宽高，\n"
+                               "选其他预设时下方宽高会被忽略。"
                 }),
-                "width": ("INT", {"default": 1080, "min": 64, "max": 8192, "step": 8}),
-                "height": ("INT", {"default": 1440, "min": 64, "max": 8192, "step": 8}),
-                "font": (font_labels, {"default": default_font}),
-                "theme": (list(_THEMES.keys()), {"default": "浅色 light"}),
+                "width": ("INT", {
+                    "default": 1080, "min": 64, "max": 8192, "step": 8,
+                    "tooltip": "自定义宽度，仅在预设选 custom 时生效。"
+                }),
+                "height": ("INT", {
+                    "default": 1440, "min": 64, "max": 8192, "step": 8,
+                    "tooltip": "自定义高度，仅在预设选 custom 时生效。\n"
+                               "内容排不下时会自动缩小字号来适配，而不是裁切。"
+                }),
+                "font": (font_labels, {
+                    "default": default_font,
+                    "tooltip": "正文字体，列表来自 Ruinode/font 目录（ttf/otf/ttc）。\n"
+                               "放入新字体后刷新页面即出现。同族粗体文件（如 msyhbd）\n"
+                               "会自动配对用于渲染粗体，没有粗体文件时用描边模拟。"
+                }),
+                "theme": (list(_THEMES.keys()), {
+                    "default": "浅色 light",
+                    "tooltip": "配色主题：浅色适合分享长图，深色适合代码类内容，\n"
+                               "米色接近纸质阅读观感。"
+                }),
             },
             "optional": {
-                "body_size": ("STRING", dict(size_opt)),
-                "h1_size": ("STRING", dict(size_opt)),
-                "h2_size": ("STRING", dict(size_opt)),
-                "h3_size": ("STRING", dict(size_opt)),
-                "h4_size": ("STRING", dict(size_opt)),
-                "h5_size": ("STRING", dict(size_opt)),
-                "h6_size": ("STRING", dict(size_opt)),
-                "letter_spacing": ("STRING", dict(size_opt)),
-                "line_spacing": ("STRING", dict(size_opt)),
-                "max_chars_per_line": ("STRING", dict(size_opt)),
+                "body_size": ("STRING", _sz("正文字号（像素）。")),
+                "h1_size": ("STRING", _sz("一级标题字号。auto 时为正文的 2.0 倍。")),
+                "h2_size": ("STRING", _sz("二级标题字号。auto 时为正文的 1.5 倍。")),
+                "h3_size": ("STRING", _sz("三级标题字号。auto 时为正文的 1.25 倍。")),
+                "h4_size": ("STRING", _sz("四级标题字号。auto 时与正文同大。")),
+                "h5_size": ("STRING", _sz("五级标题字号。auto 时为正文的 0.875 倍。")),
+                "h6_size": ("STRING", _sz("六级标题字号。auto 时为正文的 0.85 倍。")),
+                "letter_spacing": ("STRING", _sz("字间距（像素），可为负让字更紧凑。")),
+                "line_spacing": ("STRING", _sz(
+                    "行距倍数，1.6 左右最接近阅读器观感；\n值越大越松散。")),
+                "max_chars_per_line": ("STRING", _sz(
+                    "单行最多排多少字，超出即换行。\n调小可让版面更窄、更易读。")),
             },
         }
 

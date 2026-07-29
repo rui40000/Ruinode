@@ -159,7 +159,10 @@ class RuiLucida:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "待抠图的图像，支持批量（逐张推理，避免显存峰值过高）。\n"
+                               "RGBA 输入会自动丢弃 alpha 只取 RGB。"
+                }),
                 "model_name": (_list_ckpts(), {
                     "tooltip": "放在 models/lucida 下的权重（.safetensors）。\n"
                                "未找到时首次运行会自动从 HuggingFace 下载"
@@ -170,7 +173,11 @@ class RuiLucida:
                     "tooltip": "fp16 显存减半、速度更快，实测与 fp32 输出基本一致。\n"
                                "遇到黑图或异常时改回 fp32。"
                 }),
-                "device": (["auto", "cpu"], {"default": "auto"}),
+                "device": (["auto", "cpu"], {
+                    "default": "auto",
+                    "tooltip": "auto = 有显卡就用显卡。\n"
+                               "cpu 会慢十倍以上，仅在显存实在不够时用。"
+                }),
             },
             "optional": {
                 "alpha_threshold": ("FLOAT", {

@@ -12,14 +12,22 @@ class MaskSelector:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "masks": ("MASK",),
+                "masks": ("MASK", {
+                    "tooltip": "待筛选的遮罩批次（N,H,W）。单张遮罩也可以，会自动补成批次。"
+                }),
                 "sort_method": (["按面积排序 / By Area", "从左到右 / Left to Right", "从上到下 / Top to Bottom"], {
-                    "default": "按面积排序 / By Area"
+                    "default": "按面积排序 / By Area",
+                    "tooltip": "先按此规则排序，再用下面的编号取第几个。\n"
+                               "按面积：从大到小，取主体用它最稳\n"
+                               "从左到右 / 从上到下：按遮罩质心的坐标排\n"
+                               "空遮罩一律排到末尾。"
                 }),
                 "index": ("INT", {
                     "default": 1,
                     "min": 1,
-                    "step": 1
+                    "step": 1,
+                    "tooltip": "取排序后的第几个遮罩，从 1 开始。\n"
+                               "超出总数会自动夹到最后一个，并在 info 里标记 index_clamped。"
                 }),
             }
         }

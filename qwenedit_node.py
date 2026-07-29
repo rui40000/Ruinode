@@ -16,37 +16,60 @@ class QwenEditNode:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image1": ("IMAGE",),
-                "image2": ("IMAGE",),
-                "image3": ("IMAGE",),
-                "image4": ("IMAGE",),
+                "image1": ("IMAGE", {
+                    "tooltip": "参考图 1（主参考）。控制模式决定它以什么方式影响生成，\n"
+                               "例如 reference 取整体风格、pose 取人物姿态。"
+                }),
+                "image2": ("IMAGE", {
+                    "tooltip": "参考图 2。多张参考会一并提交，用于综合约束生成结果。"
+                }),
+                "image3": ("IMAGE", {
+                    "tooltip": "参考图 3。"
+                }),
+                "image4": ("IMAGE", {
+                    "tooltip": "参考图 4。"
+                }),
                 "api_key": ("STRING", {
                     "default": "",
-                    "multiline": False
+                    "multiline": False,
+                    "tooltip": "阿里云百炼（DashScope）的 API Key。\n"
+                               "⚠ 工作流会连同此值一起保存，分享 json 前记得清空。"
                 }),
                 "base_url": ("STRING", {
                     "default": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image-generation/generation",
-                    "multiline": False
+                    "multiline": False,
+                    "tooltip": "接口地址，一般不用改。\n"
+                               "走代理或私有网关时替换成对应地址。"
                 }),
                 "seed": ("INT", {
                     "default": -1,
                     "min": -1,
-                    "max": 2147483647
+                    "max": 2147483647,
+                    "tooltip": "随机种子。-1 表示每次随机；\n"
+                               "填固定值可复现同一结果，便于对比参数改动的影响。"
                 }),
                 "control_mode": (["reference", "sketch", "scribble", "pose", "canny", "depth", "hed", "mlsd", "normal", "seg"], {
-                    "default": "reference"
+                    "default": "reference",
+                    "tooltip": "参考图的约束方式：\n"
+                               "reference 整体风格参考（最常用）\n"
+                               "pose 取人物姿态 ／ depth 取空间深度 ／ seg 取区域分割\n"
+                               "canny·hed·mlsd·scribble·sketch 取不同粗细的线稿\n"
+                               "normal 取法线朝向。约束越强，构图越贴近参考图。"
                 }),
                 "width": ("INT", {
                     "default": 1024,
                     "min": 512,
                     "max": 2048,
-                    "step": 8
+                    "step": 8,
+                    "tooltip": "输出宽度。与高度共同决定画幅比例，\n"
+                               "比例与参考图差异过大时构图容易变形。"
                 }),
                 "height": ("INT", {
                     "default": 1024,
                     "min": 512,
                     "max": 2048,
-                    "step": 8
+                    "step": 8,
+                    "tooltip": "输出高度。"
                 }),
             },
         }

@@ -12,7 +12,10 @@ class DialogueExtractorNode:
             "required": {
                 "input_text": ("STRING", {
                     "multiline": True,
-                    "default": ""
+                    "default": "",
+                    "tooltip": "分镜描述原文。节点会从中挑出旁白/对白部分，\n"
+                               "画面描述、镜头调度等非台词内容会被滤掉。\n"
+                               "输出为对白列表，可直接接配音或字幕环节。"
                 }),
             },
         }

@@ -207,7 +207,10 @@ class RuiFeyNobg:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "待抠图的图像，支持批量（逐张推理，避免显存峰值过高）。\n"
+                               "RGBA 输入会自动丢弃 alpha 只取 RGB。"
+                }),
                 "model_name": (_list_models(), {
                     "tooltip": "放在 models/nobg 下的模型目录（需含 config.json 与 "
                                "model.safetensors）。\n"
@@ -225,7 +228,11 @@ class RuiFeyNobg:
                                "但 fp16 显存减半且明显更快，推荐优先用 fp16。\n"
                                "保留 fp32 作默认，是为老显卡上半精度异常时有个退路。"
                 }),
-                "device": (["auto", "cpu"], {"default": "auto"}),
+                "device": (["auto", "cpu"], {
+                    "default": "auto",
+                    "tooltip": "auto = 有显卡就用显卡。\n"
+                               "cpu 会慢十倍以上，仅在显存实在不够时用。"
+                }),
             },
             "optional": {
                 "alpha_threshold": ("FLOAT", {

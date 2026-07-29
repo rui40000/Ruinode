@@ -11,9 +11,14 @@ class FlipNode:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
+                "image": ("IMAGE", {
+                    "tooltip": "要翻转的图像。"
+                }),
                 "flip_direction": (["水平", "垂直"], {
-                    "default": "水平"
+                    "default": "水平",
+                    "tooltip": "翻转方向：\n"
+                               "水平 = 左右镜像（做角色朝向的反向素材常用）\n"
+                               "垂直 = 上下颠倒"
                 }),
             },
         }

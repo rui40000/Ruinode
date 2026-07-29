@@ -25,12 +25,19 @@ class RuiMaskPreview:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "image": ("IMAGE",),
-                "mask": ("MASK",),
+                "image": ("IMAGE", {
+                    "tooltip": "作为底图的原图。"
+                }),
+                "mask": ("MASK", {
+                    "tooltip": "要可视化的遮罩，会以彩色半透明叠在底图上。\n"
+                               "尺寸与底图不一致时会自动缩放对齐。"
+                }),
                 "mask_color": (
-                    ["红色 / Red", "绿色 / Green", "蓝色 / Blue", "黄色 / Yellow", 
+                    ["红色 / Red", "绿色 / Green", "蓝色 / Blue", "黄色 / Yellow",
                      "青色 / Cyan", "品红 / Magenta", "白色 / White"],
-                    {"default": "红色 / Red"}
+                    {"default": "红色 / Red",
+                     "tooltip": "叠加色。挑一个与画面主色反差大的更容易看清遮罩边界，\n"
+                                "例如人像多用红或青，绿植场景避开绿色。"}
                 ),
             },
             "optional": {
@@ -38,7 +45,10 @@ class RuiMaskPreview:
                     "default": 0.5,
                     "min": 0.0,
                     "max": 1.0,
-                    "step": 0.05
+                    "step": 0.05,
+                    "tooltip": "叠加不透明度。\n"
+                               "0 = 只见原图，1 = 只见纯色块。\n"
+                               "看边缘细节用 0.3~0.5，确认覆盖范围用 0.7 以上。"
                 }),
             }
         }
