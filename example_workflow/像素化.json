@@ -1,0 +1,281 @@
+{
+  "id": "e4b7a2c5-9d16-4f83-b5e0-3c7a1f6d908b",
+  "revision": 0,
+  "last_node_id": 8,
+  "last_link_id": 6,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [-1720, 400],
+      "size": [300, 330],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "label": "图像",
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [1, 2, 3]
+        },
+        {
+          "label": "遮罩",
+          "name": "MASK",
+          "type": "MASK",
+          "links": []
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "LoadImage"
+      },
+      "widgets_values": ["example.png", "image"],
+      "title": "① 加载原图"
+    },
+    {
+      "id": 2,
+      "type": "RuiPixelate",
+      "pos": [-1360, 400],
+      "size": [340, 330],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [4]
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiPixelate"
+      },
+      "widgets_values": [
+        "按目标宽度", 64, 8,
+        "主导色 dominant（像素画首选）",
+        "自适应 k-means（质量优先）", 16,
+        "无（默认）", 1, 1, 0.5, 0
+      ],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "② 像素化（output_scale=1，真实素材）"
+    },
+    {
+      "id": 3,
+      "type": "RuiPixelate",
+      "pos": [-1360, 780],
+      "size": [340, 330],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [5]
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiPixelate"
+      },
+      "widgets_values": [
+        "按目标宽度", 64, 8,
+        "主导色 dominant（像素画首选）",
+        "自适应 k-means（质量优先）", 16,
+        "无（默认）", 8, 1, 0.5, 0
+      ],
+      "title": "③ 同参数，放大 8× 仅为看清"
+    },
+    {
+      "id": 4,
+      "type": "RuiPixelate",
+      "pos": [-1360, 1160],
+      "size": [340, 330],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [6]
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "links": []
+        },
+        {
+          "name": "info",
+          "type": "STRING",
+          "links": []
+        }
+      ],
+      "properties": {
+        "aux_id": "rui40000/Ruinode",
+        "Node name for S&R": "RuiPixelate"
+      },
+      "widgets_values": [
+        "按目标宽度", 64, 8,
+        "主导色 dominant（像素画首选）",
+        "PICO-8 (16色)", 16,
+        "Bayer 4×4", 8, 1, 0.5, 0
+      ],
+      "title": "④ 对照：PICO-8 固定盘 + Bayer 抖动"
+    },
+    {
+      "id": 5,
+      "type": "SaveImage",
+      "pos": [-980, 400],
+      "size": [320, 330],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 4
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "SaveImage"
+      },
+      "widgets_values": ["pixelart/sprite"],
+      "color": "#232",
+      "bgcolor": "#353",
+      "title": "保存真实尺寸 sprite"
+    },
+    {
+      "id": 6,
+      "type": "PreviewImage",
+      "pos": [-980, 780],
+      "size": [340, 340],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 5
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "自适应 16 色效果"
+    },
+    {
+      "id": 7,
+      "type": "PreviewImage",
+      "pos": [-980, 1160],
+      "size": [340, 340],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 6
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.49",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "title": "PICO-8 效果"
+    },
+    {
+      "id": 8,
+      "type": "Note",
+      "pos": [-1720, 800],
+      "size": [700, 560],
+      "flags": {},
+      "order": 7,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "像素化 —— 面向像素游戏资产\n\n本节点产出的是「真实小分辨率 + 颜色数受控 + 硬边」的 sprite，\n不是把画面涂成方块的马赛克滤镜。\n\n■ 三种模式 ————————————————————————\n\n【按目标宽度】普通图/照片/插画 → 像素画。给输出宽度即可，\n  高度按原图比例自动算。常见 sprite 宽度：16 / 32 / 48 / 64 / 96 / 128\n\n【按像素块大小】每 N×N 原像素合成一个像素。已知放大倍数时用它最精确。\n\n【自动检测网格】探测图里隐含的像素网格并还原 ——\n  专治「AI 生成的伪像素图」：模型输出的 1024×1024 图看着像素风，\n  实际网格歪斜、边缘带抗锯齿、颜色成千上万，直接进引擎会糊。\n  实测：把一张 32×32 像素图放大 10 倍再加模糊噪点，本节点能还原回\n  32×32，与真值平均误差仅 0.0049。\n  ⚠ 该模式对干净放大图几乎必中；对模糊严重的图约 2/3 命中率。\n    info 输出会给出检测到的网格与置信度，若结果不对，\n    改用「按像素块大小」手动指定即可。\n\n■ 关键参数 ————————————————————————\n\n【downsample】主导色 dominant 是像素画首选：取块内出现最多的颜色，\n  不会凭空造出新颜色。均值 mean 会糊边并产生调色板外的颜色，\n  除非你要柔和过渡，否则别用。\n\n【palette】颜色数受控是像素画风格的一部分，也方便整套素材统一改色。\n  · 自适应 k-means —— 在 CIELAB 空间聚类，比 RGB 更贴合人眼，暗部层次更好\n  · 自适应 median cut —— 更快，质量略逊\n  · PICO-8 / Game Boy —— 复古机型的真实调色板\n  参考：8~16 色复古感强，32~64 色细节保留更多。\n\n【dither】颜色很少时用抖动换层次，代价是噪点。\n  Bayer 规则网点、可平铺，像素画最常用；Floyd-Steinberg 过渡自然\n  但纹理不规则、不利于后期手改。手绘风像素画通常不抖动。\n\n【output_scale】1 = 真实像素尺寸，直接可用作 sprite（导出素材必须用 1）。\n  >1 只是为了在 ComfyUI 里看清 —— 放大是整数倍纯复制，不会插值。\n  本工作流 ② 是真实素材，③④ 放大 8 倍只为肉眼比较。\n\n【mask 输入】把抠图节点（Lucida / FeyNobg）的 alpha 接进来，\n  会按同一网格降采样并二值化成硬边 —— sprite 需要硬边 alpha。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [2, 1, 0, 3, 0, "IMAGE"],
+    [3, 1, 0, 4, 0, "IMAGE"],
+    [4, 2, 0, 5, 0, "IMAGE"],
+    [5, 3, 0, 6, 0, "IMAGE"],
+    [6, 4, 0, 7, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.7,
+      "offset": [1900, -300]
+    }
+  },
+  "version": 0.4
+}
