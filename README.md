@@ -1036,14 +1036,25 @@ WAS Node Suite 的「Text Multiline」会把 `#` 开头的行**当注释删除**
 
 | 步骤 | 由谁完成 |
 |:-----|:---------|
-| 角色图 → 八方向静态图 | GPTimage2 等外部工具 |
-| 静态图 → 循环行走视频 | Seedance 首尾帧等外部工具 |
-| 视频 → 序列帧（可选帧率）| VHS「Load Video」的 `force_rate` |
+| 角色图 → 八方向静态图 | GPTimage2 / Holopix Universal Edit 等 |
+| 静态图 → 循环行走视频 | Seedance 首尾帧等 |
+| 视频 → 序列帧 | 从文件读用 VHS「Load Video」；**接在视频生成节点后面用原生「Get Video Components」** |
+| 抽帧（降帧率）| VHS「Select Every Nth Image」|
+| 抠图（提供语义级 alpha）| Lucida / BiRefNet 等 |
 | **拆分 + 编号 + 分组 + 8 队列输出** | **本节点** |
 | 8 组透明 PNG 序列帧 | `SaveImage`（4 通道输入会自动存成 RGBA）|
 | 8 个透明 webm | VHS「Video Combine」，`format=video/webm` + `pix_fmt=yuva420p` |
 
 整条链路只有拆分环节是缺失的，其余全部复用成熟实现。
+
+**两个示例工作流**:
+- [八方向行走动画.json](example_workflow/八方向行走动画.json)：从**已有视频文件**出发（VHS Load Video）
+- [角色图到八方向行走动画（一体化）.json](example_workflow/角色图到八方向行走动画（一体化）.json)：**从角色图一路到成品**，把生图、生视频、拆分、导出串成一条链
+
+一体化工作流的关键是打通 `VIDEO → IMAGE`：视频生成节点输出的是 ComfyUI 的 `VIDEO` 类型，而 VHS「Load Video」只能从文件读、接不上。用 ComfyUI **原生的「Get Video Components」**（`image/video` 分类）即可，输入 VIDEO、输出 images/audio/fps，不需要装任何额外插件。
+
+⚠️ **帧率两处必须匹配**：Seedance 出的是 24fps，抽帧间隔与输出帧率要对应，否则 webm 播放速度不对。
+`select_every_nth=3` ↔ `frame_rate=8`；要 12fps 就用 `2` ↔ `12`；要全量 24fps 就用 `1` ↔ `24`。
 
 **输入参数**:
 - `images` (IMAGE): 视频转出的序列帧

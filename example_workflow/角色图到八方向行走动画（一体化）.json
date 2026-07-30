@@ -1,0 +1,2143 @@
+{
+ "id": "9a3f7c21-6b48-4d92-8e15-4c7f2a9d6b03",
+ "revision": 0,
+ "last_node_id": 32,
+ "last_link_id": 39,
+ "nodes": [
+  {
+   "id": 1,
+   "type": "LoadImage",
+   "pos": [
+    -3400,
+    200
+   ],
+   "size": [
+    340,
+    400
+   ],
+   "flags": {},
+   "order": 0,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      1
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "example.png",
+    "image"
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "① 角色图（图片1）"
+  },
+  {
+   "id": 2,
+   "type": "LoadImage",
+   "pos": [
+    -3400,
+    640
+   ],
+   "size": [
+    340,
+    400
+   ],
+   "flags": {},
+   "order": 1,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      2
+     ]
+    },
+    {
+     "name": "MASK",
+     "type": "MASK",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "LoadImage"
+   },
+   "widgets_values": [
+    "example.png",
+    "image"
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "② 八方向布局参考图（图片2）"
+  },
+  {
+   "id": 3,
+   "type": "Holopix Reference Images",
+   "pos": [
+    -3010,
+    200
+   ],
+   "size": [
+    200,
+    190
+   ],
+   "flags": {},
+   "order": 4,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image_1",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 1
+    },
+    {
+     "name": "image_2",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "name": "image_3",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_4",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_5",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_6",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_7",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_8",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    },
+    {
+     "name": "image_9",
+     "shape": 7,
+     "type": "IMAGE",
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "references",
+     "type": "HOLOPIX_REFERENCE_IMAGES",
+     "links": [
+      3
+     ]
+    },
+    {
+     "name": "count",
+     "type": "INT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Holopix Reference Images"
+   },
+   "widgets_values": [],
+   "title": "③ 组合参考图"
+  },
+  {
+   "id": 4,
+   "type": "Text Multiline",
+   "pos": [
+    -3010,
+    440
+   ],
+   "size": [
+    380,
+    420
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "links": [
+      4
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "was-node-suite-comfyui",
+    "Node name for S&R": "Text Multiline"
+   },
+   "widgets_values": [
+    "基于图片1角色，为其生成一张俯视45度视角的八方向行走的静态模板图。\n角色的角度严格参考图片2。\n角色的行走姿势根据角色特点自行决定，一定要是行走的初始状态。\n保持图片1角色造型和风格不变，头身比保持原图的比例不变，不要受图2引导图的影响。\n\n8个方向，在画面上以三行排列，分别是：\n第一行：\n左边，向左下方行走；\n中间，向正下方行走；\n右边，向右下方行走。\n\n第二行：\n左边，向左方行走；\n左边，向右方行走；\n\n第三行：\n左边，向左下方行走；\n中间，向正下方行走；\n右边，向右下方行走。\n\n所有角色都是俯视45度视角拍摄，最终的素材需要用于俯视视角游戏。\n视角保持统一。\n角色的位置严格参考图片2，整体干净专业，无背景元素、无文字、无水印。\n背景替换成纯黑色背景。",
+    [
+     false,
+     true
+    ]
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "④ 静态图提示词"
+  },
+  {
+   "id": 5,
+   "type": "Holopix Universal Edit V3",
+   "pos": [
+    -2580,
+    200
+   ],
+   "size": [
+    300,
+    170
+   ],
+   "flags": {},
+   "order": 5,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 4
+    },
+    {
+     "name": "references",
+     "shape": 7,
+     "type": "HOLOPIX_REFERENCE_IMAGES",
+     "link": 3
+    },
+    {
+     "name": "ratio",
+     "type": "COMBO",
+     "widget": {
+      "name": "ratio"
+     },
+     "link": null
+    },
+    {
+     "name": "quality",
+     "type": "COMBO",
+     "widget": {
+      "name": "quality"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "links": [
+      5,
+      6,
+      7
+     ]
+    },
+    {
+     "name": "status",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "client_id",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "resolved_ratio",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "result_json",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Holopix Universal Edit V3"
+   },
+   "widgets_values": [
+    "3:4",
+    "2K"
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "⑤ 生成八方向静态图"
+  },
+  {
+   "id": 6,
+   "type": "PreviewImage",
+   "pos": [
+    -2580,
+    420
+   ],
+   "size": [
+    300,
+    400
+   ],
+   "flags": {},
+   "order": 8,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 5
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "PreviewImage"
+   },
+   "widgets_values": [],
+   "color": "#432",
+   "bgcolor": "#653",
+   "title": "静态图预览（先确认这步对了再往下跑）"
+  },
+  {
+   "id": 7,
+   "type": "Text Multiline",
+   "pos": [
+    -2230,
+    480
+   ],
+   "size": [
+    380,
+    420
+   ],
+   "flags": {},
+   "order": 3,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [
+    {
+     "name": "STRING",
+     "type": "STRING",
+     "links": [
+      8
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "was-node-suite-comfyui",
+    "Node name for S&R": "Text Multiline"
+   },
+   "widgets_values": [
+    "图像展示了一个角色的8个方向站立的起始画面。\n8个方向，在画面上以三行排列，分别是：\n第一行：\n左边，向左下方行走；\n中间，向正下方行走；\n右边，向右下方行走。\n\n第二行：\n左边，向左方行走；\n左边，向右方行走；\n\n第三行：\n左边，向左下方行走；\n中间，向正下方行走；\n右边，向右下方行走。\n\n请让每个角色都保持在原始位置，大小不变，进行原地行走。\n角色行走的朝向一定要按照分配的要求。\n角色的行走形态要符合其自身性格和形态特点。\n全程保持固定镜头不变，不要切镜头变视距。\n务必要确保首尾帧自然循环。\n\n画面上只有角色和黑色背景，不要添加任何其他元素。",
+    [
+     false,
+     true
+    ]
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "⑥ 视频提示词"
+  },
+  {
+   "id": 8,
+   "type": "Holopix Seedance Start End Video",
+   "pos": [
+    -2230,
+    200
+   ],
+   "size": [
+    350,
+    170
+   ],
+   "flags": {},
+   "order": 9,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "prompt",
+     "type": "STRING",
+     "link": 8
+    },
+    {
+     "name": "first_frame",
+     "type": "IMAGE",
+     "link": 6
+    },
+    {
+     "name": "last_frame",
+     "type": "IMAGE",
+     "link": 7
+    },
+    {
+     "name": "quality",
+     "type": "COMBO",
+     "widget": {
+      "name": "quality"
+     },
+     "link": null
+    },
+    {
+     "name": "duration",
+     "type": "INT",
+     "widget": {
+      "name": "duration"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "video",
+     "type": "VIDEO",
+     "links": [
+      9,
+      10
+     ]
+    },
+    {
+     "name": "video_url",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "status",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "client_id",
+     "type": "STRING",
+     "links": []
+    },
+    {
+     "name": "result_json",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "Node name for S&R": "Holopix Seedance Start End Video"
+   },
+   "widgets_values": [
+    "720p",
+    4
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "⑦ Seedance 首尾帧循环视频"
+  },
+  {
+   "id": 9,
+   "type": "SaveVideo",
+   "pos": [
+    -1850,
+    480
+   ],
+   "size": [
+    340,
+    400
+   ],
+   "flags": {},
+   "order": 11,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "video",
+     "type": "VIDEO",
+     "link": 9
+    },
+    {
+     "name": "filename_prefix",
+     "type": "STRING",
+     "widget": {
+      "name": "filename_prefix"
+     },
+     "link": null
+    },
+    {
+     "name": "format",
+     "type": "COMBO",
+     "widget": {
+      "name": "format"
+     },
+     "link": null
+    },
+    {
+     "name": "codec",
+     "type": "COMBO",
+     "widget": {
+      "name": "codec"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveVideo"
+   },
+   "widgets_values": [
+    "8dir_src/walk",
+    "auto",
+    "auto"
+   ],
+   "color": "#432",
+   "bgcolor": "#653",
+   "title": "留存原始视频（便于重跑后半段，不必再花钱生成）"
+  },
+  {
+   "id": 10,
+   "type": "GetVideoComponents",
+   "pos": [
+    -1850,
+    200
+   ],
+   "size": [
+    300,
+    90
+   ],
+   "flags": {},
+   "order": 10,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "video",
+     "type": "VIDEO",
+     "link": 10
+    }
+   ],
+   "outputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "links": [
+      11
+     ]
+    },
+    {
+     "name": "audio",
+     "type": "AUDIO",
+     "links": []
+    },
+    {
+     "name": "fps",
+     "type": "FLOAT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "GetVideoComponents"
+   },
+   "widgets_values": [],
+   "color": "#347",
+   "bgcolor": "#468",
+   "title": "⑧【关键桥梁】VIDEO → 帧序列"
+  },
+  {
+   "id": 11,
+   "type": "VHS_SelectEveryNthImage",
+   "pos": [
+    -1500,
+    200
+   ],
+   "size": [
+    300,
+    106
+   ],
+   "flags": {},
+   "order": 12,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 11
+    },
+    {
+     "name": "select_every_nth",
+     "type": "INT",
+     "widget": {
+      "name": "select_every_nth"
+     },
+     "link": null
+    },
+    {
+     "name": "skip_first_images",
+     "type": "INT",
+     "widget": {
+      "name": "skip_first_images"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "IMAGE",
+     "type": "IMAGE",
+     "links": [
+      12
+     ]
+    },
+    {
+     "name": "count",
+     "type": "INT",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_SelectEveryNthImage"
+   },
+   "widgets_values": [
+    3,
+    0
+   ],
+   "color": "#347",
+   "bgcolor": "#468",
+   "title": "⑨ 抽帧 24fps÷3=8fps（游戏循环够用）"
+  },
+  {
+   "id": 12,
+   "type": "LayerMask: LoadBiRefNetModelV2",
+   "pos": [
+    -1150,
+    120
+   ],
+   "size": [
+    300,
+    58
+   ],
+   "flags": {},
+   "order": 6,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "version",
+     "type": "COMBO",
+     "widget": {
+      "name": "version"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "birefnet_model",
+     "type": "BIREFNET_MODEL",
+     "links": [
+      13
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui_layerstyle_advance",
+    "Node name for S&R": "LayerMask: LoadBiRefNetModelV2"
+   },
+   "widgets_values": [
+    "BiRefNet-General"
+   ],
+   "color": "rgba(27, 80, 119, 0.7)"
+  },
+  {
+   "id": 13,
+   "type": "LayerMask: BiRefNetUltraV2",
+   "pos": [
+    -1150,
+    220
+   ],
+   "size": [
+    300,
+    250
+   ],
+   "flags": {},
+   "order": 13,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "link": 12
+    },
+    {
+     "name": "birefnet_model",
+     "type": "BIREFNET_MODEL",
+     "link": 13
+    },
+    {
+     "name": "detail_method",
+     "type": "COMBO",
+     "widget": {
+      "name": "detail_method"
+     },
+     "link": null
+    },
+    {
+     "name": "detail_erode",
+     "type": "INT",
+     "widget": {
+      "name": "detail_erode"
+     },
+     "link": null
+    },
+    {
+     "name": "detail_dilate",
+     "type": "INT",
+     "widget": {
+      "name": "detail_dilate"
+     },
+     "link": null
+    },
+    {
+     "name": "black_point",
+     "type": "FLOAT",
+     "widget": {
+      "name": "black_point"
+     },
+     "link": null
+    },
+    {
+     "name": "white_point",
+     "type": "FLOAT",
+     "widget": {
+      "name": "white_point"
+     },
+     "link": null
+    },
+    {
+     "name": "process_detail",
+     "type": "BOOLEAN",
+     "widget": {
+      "name": "process_detail"
+     },
+     "link": null
+    },
+    {
+     "name": "device",
+     "type": "COMBO",
+     "widget": {
+      "name": "device"
+     },
+     "link": null
+    },
+    {
+     "name": "max_megapixels",
+     "type": "FLOAT",
+     "widget": {
+      "name": "max_megapixels"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "image",
+     "type": "IMAGE",
+     "links": [
+      14
+     ]
+    },
+    {
+     "name": "mask",
+     "type": "MASK",
+     "links": [
+      15
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui_layerstyle_advance",
+    "Node name for S&R": "LayerMask: BiRefNetUltraV2"
+   },
+   "widgets_values": [
+    "VITMatte",
+    4,
+    2,
+    0.01,
+    0.99,
+    false,
+    "cuda",
+    2
+   ],
+   "color": "rgba(27, 80, 119, 0.7)",
+   "title": "⑩ 抠图（提供语义级 alpha）"
+  },
+  {
+   "id": 14,
+   "type": "RuiEightDirSplit",
+   "pos": [
+    -780,
+    200
+   ],
+   "size": [
+    380,
+    510
+   ],
+   "flags": {},
+   "order": 14,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 14
+    },
+    {
+     "name": "masks",
+     "shape": 7,
+     "type": "MASK",
+     "link": 15
+    }
+   ],
+   "outputs": [
+    {
+     "name": "dir_1",
+     "type": "IMAGE",
+     "links": [
+      16,
+      18
+     ]
+    },
+    {
+     "name": "dir_2",
+     "type": "IMAGE",
+     "links": [
+      19,
+      21
+     ]
+    },
+    {
+     "name": "dir_3",
+     "type": "IMAGE",
+     "links": [
+      22,
+      24
+     ]
+    },
+    {
+     "name": "dir_4",
+     "type": "IMAGE",
+     "links": [
+      25,
+      27
+     ]
+    },
+    {
+     "name": "dir_5",
+     "type": "IMAGE",
+     "links": [
+      28,
+      30
+     ]
+    },
+    {
+     "name": "dir_6",
+     "type": "IMAGE",
+     "links": [
+      31,
+      33
+     ]
+    },
+    {
+     "name": "dir_7",
+     "type": "IMAGE",
+     "links": [
+      34,
+      36
+     ]
+    },
+    {
+     "name": "dir_8",
+     "type": "IMAGE",
+     "links": [
+      37,
+      39
+     ]
+    },
+    {
+     "name": "info",
+     "type": "STRING",
+     "links": []
+    }
+   ],
+   "properties": {
+    "aux_id": "rui40000/Ruinode",
+    "Node name for S&R": "RuiEightDirSplit"
+   },
+   "widgets_values": [
+    3,
+    3,
+    "4",
+    "SW,S,SE,W,E,NW,N,NE",
+    "已带透明通道（推荐·上游接抠图节点）",
+    0.92,
+    0.2,
+    1.0,
+    1.0,
+    0.05,
+    true,
+    true,
+    16
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "⑪ 八方向拆分"
+  },
+  {
+   "id": 15,
+   "type": "PrimitiveFloat",
+   "pos": [
+    -780,
+    760
+   ],
+   "size": [
+    300,
+    58
+   ],
+   "flags": {},
+   "order": 7,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "value",
+     "type": "FLOAT",
+     "widget": {
+      "name": "value"
+     },
+     "link": null
+    }
+   ],
+   "outputs": [
+    {
+     "name": "FLOAT",
+     "type": "FLOAT",
+     "links": [
+      17,
+      20,
+      23,
+      26,
+      29,
+      32,
+      35,
+      38
+     ]
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "PrimitiveFloat"
+   },
+   "widgets_values": [
+    8
+   ],
+   "title": "输出帧率（须与上面的抽帧间隔匹配）"
+  },
+  {
+   "id": 16,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    100
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 15,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 16
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 17
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/1_SW",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "1. SW → 透明 webm"
+  },
+  {
+   "id": 17,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    100
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 16,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 18
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/1_SW/SW"
+   ],
+   "title": "1. SW → 透明 PNG 序列帧"
+  },
+  {
+   "id": 18,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    440
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 17,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 19
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 20
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/2_S",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "2. S → 透明 webm"
+  },
+  {
+   "id": 19,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    440
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 18,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 21
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/2_S/S"
+   ],
+   "title": "2. S → 透明 PNG 序列帧"
+  },
+  {
+   "id": 20,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    780
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 19,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 22
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 23
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/3_SE",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "3. SE → 透明 webm"
+  },
+  {
+   "id": 21,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    780
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 20,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 24
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/3_SE/SE"
+   ],
+   "title": "3. SE → 透明 PNG 序列帧"
+  },
+  {
+   "id": 22,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    1120
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 21,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 25
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 26
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/4_W",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "4. W → 透明 webm"
+  },
+  {
+   "id": 23,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    1120
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 22,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 27
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/4_W/W"
+   ],
+   "title": "4. W → 透明 PNG 序列帧"
+  },
+  {
+   "id": 24,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    1460
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 23,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 28
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 29
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/5_E",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "5. E → 透明 webm"
+  },
+  {
+   "id": 25,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    1460
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 24,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 30
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/5_E/E"
+   ],
+   "title": "5. E → 透明 PNG 序列帧"
+  },
+  {
+   "id": 26,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    1800
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 25,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 31
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 32
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/6_NW",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "6. NW → 透明 webm"
+  },
+  {
+   "id": 27,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    1800
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 26,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 33
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/6_NW/NW"
+   ],
+   "title": "6. NW → 透明 PNG 序列帧"
+  },
+  {
+   "id": 28,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    2140
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 27,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 34
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 35
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/7_N",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "7. N → 透明 webm"
+  },
+  {
+   "id": 29,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    2140
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 28,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 36
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/7_N/N"
+   ],
+   "title": "7. N → 透明 PNG 序列帧"
+  },
+  {
+   "id": 30,
+   "type": "VHS_VideoCombine",
+   "pos": [
+    -340,
+    2480
+   ],
+   "size": [
+    320,
+    460
+   ],
+   "flags": {},
+   "order": 29,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 37
+    },
+    {
+     "name": "audio",
+     "shape": 7,
+     "type": "AUDIO",
+     "link": null
+    },
+    {
+     "name": "meta_batch",
+     "shape": 7,
+     "type": "VHS_BatchManager",
+     "link": null
+    },
+    {
+     "name": "vae",
+     "shape": 7,
+     "type": "VAE",
+     "link": null
+    },
+    {
+     "name": "frame_rate",
+     "type": "FLOAT",
+     "widget": {
+      "name": "frame_rate"
+     },
+     "link": 38
+    }
+   ],
+   "outputs": [
+    {
+     "name": "Filenames",
+     "type": "VHS_FILENAMES",
+     "links": []
+    }
+   ],
+   "properties": {
+    "cnr_id": "comfyui-videohelpersuite",
+    "Node name for S&R": "VHS_VideoCombine"
+   },
+   "widgets_values": {
+    "frame_rate": 8,
+    "loop_count": 0,
+    "filename_prefix": "8dir/8_NE",
+    "format": "video/webm",
+    "pix_fmt": "yuva420p",
+    "crf": 20,
+    "save_metadata": true,
+    "trim_to_audio": false,
+    "pingpong": false,
+    "save_output": true
+   },
+   "title": "8. NE → 透明 webm"
+  },
+  {
+   "id": 31,
+   "type": "SaveImage",
+   "pos": [
+    20,
+    2480
+   ],
+   "size": [
+    300,
+    300
+   ],
+   "flags": {},
+   "order": 30,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 39
+    }
+   ],
+   "outputs": [],
+   "properties": {
+    "cnr_id": "comfy-core",
+    "Node name for S&R": "SaveImage"
+   },
+   "widgets_values": [
+    "8dir_frames/8_NE/NE"
+   ],
+   "title": "8. NE → 透明 PNG 序列帧"
+  },
+  {
+   "id": 32,
+   "type": "Note",
+   "pos": [
+    -3400,
+    1080
+   ],
+   "size": [
+    740,
+    1180
+   ],
+   "flags": {},
+   "order": 31,
+   "mode": 0,
+   "inputs": [],
+   "outputs": [],
+   "properties": {},
+   "widgets_values": [
+    "角色图 → 八方向行走动画（一体化）\n\n原来的两个工作流合并成了这一个。断点在于：\nSeedance 输出的是 ComfyUI 的 VIDEO 类型，而八方向拆分要的是 IMAGE 帧序列，\nVHS「Load Video」只能从文件读、接不上 VIDEO。\n\n■ 桥梁：GetVideoComponents（ComfyUI 原生，无需装任何东西）———\n\n  节点名「Get Video Components」，分类 image/video。\n  输入 VIDEO，输出 images / audio / fps —— 正好把视频拆成帧序列。\n  Holopix 插件的 README 里也明确写了「可直接连接原生 Save Video、\n  Get Video Components」，且它内部是先把视频下载到本地再包装成 VIDEO，\n  所以解码没有问题。\n  → 没有为此新写任何节点。\n\n■ 帧率的两处必须匹配 ————————————————————\n\n  Seedance 出的是 720p / 4 秒 / 24fps ≈ 97 帧。游戏里的行走循环\n  8~12 帧就够，全量 97 帧既占空间也没必要，所以中间加了抽帧：\n\n    ⑨ VHS「Select Every Nth Image」select_every_nth = 3\n       → 24 ÷ 3 = 8fps，约 32 帧\n    输出帧率（PrimitiveFloat）= 8\n\n  这两个值必须对应，否则 webm 的播放速度会不对：\n    想要 12fps → 抽帧间隔 2（24÷2），输出帧率 12\n    想要全量 24fps → 抽帧间隔 1，输出帧率 24\n\n■ 为什么保留「留存原始视频」——————————————\n\n  Seedance 是付费生成。把 VIDEO 同时接一份 SaveVideo 存下来，\n  后半段（抠图/拆分/导出）参数没调好时可以用「八方向行走动画.json」\n  加载这个视频单独重跑，不必再花钱生成一次。\n  调参阶段建议把前面的 Holopix 两个节点 Ctrl+M 静音，只跑后半段。\n\n■ 分两段跑的建议 ————————————————————\n\n  ⑤ 生成静态图之后有个预览节点。八方向布局/朝向是否正确、角色是否变形，\n  在这一步就能看出来 —— 确认没问题再往下跑视频，能省掉很多废单。\n\n■ 抠图这一环 ——————————————————————\n\n  用的是你原来的 LayerMask BiRefNetUltraV2（语义级 alpha）。\n  拆分节点的 bg_mode 因此选「已带透明通道」。\n  不要改成「白底转透明」：那是颜色阈值法，角色身上的白色衣物会被\n  啃出破洞；而且这套提示词要求纯黑背景，颜色阈值法本就不适用。\n  仓库里的 Lucida 抠图节点也可以替换这一环，两者都是语义级。\n\n■ 拆分节点的关键参数 —————————————————\n\n  · empty_cells = 4      3×3 中间留空（行优先、从 0 开始）\n  · direction_names      默认 SW,S,SE / W,E / NW,N,NE\n      对应行1面向观众、行3背对观众。与实际朝向不符就改这一行，\n      名字只影响标注不影响画面。\n  · expand_beyond_cell   务必开启，否则角色探出格线的部分（脚、\n      飘起的衣角、手杖）会被切断。\n  · edge_shrink = 0.2    治白边的主力。配语义级 alpha 用 0.15~0.25。\n  · crop_padding = 16    给描边/发光等后续特效留余量。\n\n■ 产出 ————————————————————————\n\n  output/8dir/           8 个透明 webm（VP9 + yuva420p）\n  output/8dir_frames/    8 组透明 PNG 序列帧\n  output/8dir_src/       Seedance 生成的原始视频"
+   ],
+   "color": "#432",
+   "bgcolor": "#653"
+  }
+ ],
+ "links": [
+  [
+   1,
+   1,
+   0,
+   3,
+   0,
+   "IMAGE"
+  ],
+  [
+   2,
+   2,
+   0,
+   3,
+   1,
+   "IMAGE"
+  ],
+  [
+   3,
+   3,
+   0,
+   5,
+   1,
+   "HOLOPIX_REFERENCE_IMAGES"
+  ],
+  [
+   4,
+   4,
+   0,
+   5,
+   0,
+   "STRING"
+  ],
+  [
+   5,
+   5,
+   0,
+   6,
+   0,
+   "IMAGE"
+  ],
+  [
+   6,
+   5,
+   0,
+   8,
+   1,
+   "IMAGE"
+  ],
+  [
+   7,
+   5,
+   0,
+   8,
+   2,
+   "IMAGE"
+  ],
+  [
+   8,
+   7,
+   0,
+   8,
+   0,
+   "STRING"
+  ],
+  [
+   9,
+   8,
+   0,
+   9,
+   0,
+   "VIDEO"
+  ],
+  [
+   10,
+   8,
+   0,
+   10,
+   0,
+   "VIDEO"
+  ],
+  [
+   11,
+   10,
+   0,
+   11,
+   0,
+   "IMAGE"
+  ],
+  [
+   12,
+   11,
+   0,
+   13,
+   0,
+   "IMAGE"
+  ],
+  [
+   13,
+   12,
+   0,
+   13,
+   1,
+   "BIREFNET_MODEL"
+  ],
+  [
+   14,
+   13,
+   0,
+   14,
+   0,
+   "IMAGE"
+  ],
+  [
+   15,
+   13,
+   1,
+   14,
+   1,
+   "MASK"
+  ],
+  [
+   16,
+   14,
+   0,
+   16,
+   0,
+   "IMAGE"
+  ],
+  [
+   17,
+   15,
+   0,
+   16,
+   4,
+   "FLOAT"
+  ],
+  [
+   18,
+   14,
+   0,
+   17,
+   0,
+   "IMAGE"
+  ],
+  [
+   19,
+   14,
+   1,
+   18,
+   0,
+   "IMAGE"
+  ],
+  [
+   20,
+   15,
+   0,
+   18,
+   4,
+   "FLOAT"
+  ],
+  [
+   21,
+   14,
+   1,
+   19,
+   0,
+   "IMAGE"
+  ],
+  [
+   22,
+   14,
+   2,
+   20,
+   0,
+   "IMAGE"
+  ],
+  [
+   23,
+   15,
+   0,
+   20,
+   4,
+   "FLOAT"
+  ],
+  [
+   24,
+   14,
+   2,
+   21,
+   0,
+   "IMAGE"
+  ],
+  [
+   25,
+   14,
+   3,
+   22,
+   0,
+   "IMAGE"
+  ],
+  [
+   26,
+   15,
+   0,
+   22,
+   4,
+   "FLOAT"
+  ],
+  [
+   27,
+   14,
+   3,
+   23,
+   0,
+   "IMAGE"
+  ],
+  [
+   28,
+   14,
+   4,
+   24,
+   0,
+   "IMAGE"
+  ],
+  [
+   29,
+   15,
+   0,
+   24,
+   4,
+   "FLOAT"
+  ],
+  [
+   30,
+   14,
+   4,
+   25,
+   0,
+   "IMAGE"
+  ],
+  [
+   31,
+   14,
+   5,
+   26,
+   0,
+   "IMAGE"
+  ],
+  [
+   32,
+   15,
+   0,
+   26,
+   4,
+   "FLOAT"
+  ],
+  [
+   33,
+   14,
+   5,
+   27,
+   0,
+   "IMAGE"
+  ],
+  [
+   34,
+   14,
+   6,
+   28,
+   0,
+   "IMAGE"
+  ],
+  [
+   35,
+   15,
+   0,
+   28,
+   4,
+   "FLOAT"
+  ],
+  [
+   36,
+   14,
+   6,
+   29,
+   0,
+   "IMAGE"
+  ],
+  [
+   37,
+   14,
+   7,
+   30,
+   0,
+   "IMAGE"
+  ],
+  [
+   38,
+   15,
+   0,
+   30,
+   4,
+   "FLOAT"
+  ],
+  [
+   39,
+   14,
+   7,
+   31,
+   0,
+   "IMAGE"
+  ]
+ ],
+ "groups": [],
+ "config": {},
+ "extra": {
+  "ds": {
+   "scale": 0.45,
+   "offset": [
+    3560,
+    60
+   ]
+  }
+ },
+ "version": 0.4
+}
