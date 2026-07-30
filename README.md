@@ -28,6 +28,7 @@ Rui-Node🐶 是一个功能丰富的 ComfyUI 节点集合，提供图像处理�
 - [千问编辑图像生成 / Qwen Edit Image Generation](#4-千问编辑图像生成--qwen-edit-image-generation)
 - [SDMatte 精细抠图 / SDMatte Interactive Matting](#17-sdmatte-精细抠图--sdmatte-interactive-matting)
 - [ZenMux API 连接 / ZenMux API Connector](#18-zenmux-api-连接--zenmux-api-connector)
+- [越光 API 连接 / YueGuang API Connector](#26-越光-api-连接--yueguang-api-connector)
 - [FeyNobg 抠图 / FeyNobg Matting](#22-feynobg-抠图--feynobg-matting)
 - [Lucida 抠图 / Lucida Matting](#23-lucida-抠图--lucida-matting)
 
@@ -1097,6 +1098,53 @@ Lucida 一次就能识别整张雪碧图的全部 8 个角色（各格前景占�
 | webm 透明 | 导出后回读**透明像素占比 0.635**，与素材一致 |
 
 ⚠️ **验证 webm 透明时容易被误导**：alpha 存放在 WebM 的独立边带里，`ffprobe` 看主流会显示 `yuv420p`，用 ffmpeg 默认解码回读也会得到全不透明——这是**内置 vp9 解码器不处理 alpha 边带**所致，并非文件丢了透明。需显式加 `-c:v libvpx-vp9` 解码才能读到。播放器与 Unity/Godot 走的是 libvpx，能正确读取。
+
+---
+
+### 26. 越光 API 连接 / YueGuang API Connector
+
+**分类**: `Rui-Node🐶/AI模型🤖`
+
+**功能描述**:  
+通过越光（Nebula）聚合平台调用其收录的文本类模型。OpenAI 兼容协议，chat 端点 `https://llm.ai-nebula.com/v1/chat/completions`。参数、输出与容错行为与 [ZenMux 节点](#18-zenmux-api-连接--zenmux-api-connector) 保持一致，便于两者互换。
+
+**模型清单（25 个，价格单位 USD / 百万 token）**:
+
+| 厂商 | 模型 | 输入 | 输出 |
+|:-----|:-----|-----:|-----:|
+| OpenAI | gpt-5.6-sol | 4.75 | 5.00 |
+| | gpt-5.6-terra | 2.375 | 2.50 |
+| | gpt-5.6-luna | 0.95 | 1.00 |
+| | gpt-4.1 / gpt-4.1-mini | 2.00 / 0.40 | 8.00 / 1.60 |
+| | gpt-4o / gpt-4o-mini | 2.50 / 0.15 | 10.00 / 0.60 |
+| | o4-mini / o3-mini | 1.10 | 4.40 |
+| Anthropic | claude-opus-5 | 5.00 | 5.00 |
+| | claude-opus-4-7 / 4-6 | 15.00 | 75.00 |
+| | claude-sonnet-5 | 2.00 | 2.00 |
+| | claude-sonnet-4-6 | 3.00 | 15.00 |
+| | claude-haiku-4-5-20251001 | 0.80 | 4.00 |
+| | claude-fable-5 | 3.00 | 15.00 |
+| DeepSeek | deepseek-v4-pro | 2.19 | 8.76 |
+| | **deepseek-v4-flash**（默认）| **0.10** | **0.30** |
+| | deepseek-r1-250528 | 0.55 | 2.19 |
+| | deepseek-v3-250324 | 0.27 | 1.10 |
+| Kimi | kimi-k3 | 2.86 | 2.86 |
+| | kimi-k2.7-code / k2.6 / k2.5 / k2-thinking | 1.00 | 4.00 |
+
+**输入参数**: 与 ZenMux 节点相同——`api_key`、`model`（下拉带价签）、`system_prompt`、`user_prompt`、`seed`，以及可选的 `temperature`、`top_p`、`max_tokens`、`image_1`~`image_6`、`detail`、`image_max_size`、`base_url`、`proxy_url`、`usd_to_cny`。
+
+**输出**: `text` / `model_id` / `usage_stats`（五行：token 消耗、输出字数、厂商、模型与单价、美元与人民币费用）
+
+**与 ZenMux 节点的三点差异**:
+
+1. **模型清单内置，不做在线快照**。越光没有可枚举的模型接口，清单与价格来自官方规范文档，直接写在 `yueguang/model_registry.py` 里——少一个联网环节，也不会因拉取失败导致下拉变空。价格变动时改那张表即可。
+2. **model id 不带厂商前缀**（是 `gpt-4o` 而非 `openai/gpt-4o`）。下拉里同厂商靠排序聚在一起，搜索时输 `gpt` / `claude` / `deepseek` / `kimi` 过滤。
+3. 默认模型是全表最便宜的 `deepseek-v4-flash`（$0.10/$0.30），官方示例也用它，默认值便宜可避免误触发时产生意外费用。
+
+**沿用的实战经验**:
+- `base_url` 默认值**不带 `://`**——ComfyUI 前端会吞掉文本框里的协议片段（本仓库为此修过多次），协议由后端自动补全
+- **自适应参数重试**：部分模型弃用 `temperature`、或要求用 `max_completion_tokens` 取代 `max_tokens`，命中这类 400 时会剔除/改名后自动重试，正常请求零额外开销
+- `VALIDATE_INPUTS` 宽松放行：价格表更新后旧工作流里保存的标签不再逐字匹配，但只要能解析出 model id 就放行，不会让整个工作流失效
 
 ---
 
