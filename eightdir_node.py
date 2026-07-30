@@ -214,8 +214,9 @@ class RuiEightDirSplit:
                                "关闭时按格子严格切分，角色只要探出格线就会被切断\n"
                                "——最常见的是脚、飘起的斗篷和手杖被削掉一截。\n"
                                "开启后格子只用来判定「这是哪个方向」，实际范围由角色\n"
-                               "自身的连通区域决定，因此不会被切；按质心归属，\n"
-                               "相邻角色也不会被卷进来。"
+                               "自身的连通区域决定；按质心归属，相邻角色不会被卷进来。\n"
+                               "对三种 bg_mode 都有效：选「不处理」时也会在内部算一份\n"
+                               "白底检测来圈定范围，输出仍保持不透明。"
                 }),
                 "auto_crop": ("BOOLEAN", {
                     "default": True,
@@ -224,8 +225,10 @@ class RuiEightDirSplit:
                                "既能合成视频，角色也不会在帧间跳动。"
                 }),
                 "crop_padding": ("INT", {
-                    "default": 8, "min": 0, "max": 200, "step": 1,
-                    "tooltip": "裁剪时在内容外保留的边距（像素）。"
+                    "default": 16, "min": 0, "max": 200, "step": 1,
+                    "tooltip": "裁剪时在内容外保留的边距（像素）。\n"
+                               "给足边距不仅好看，也给后续的描边、发光、\n"
+                               "阴影等特效留出余量，免得贴着边显得像被切了。"
                 }),
             },
             "optional": {
@@ -280,14 +283,25 @@ class RuiEightDirSplit:
         xbnd = [int(round(c * W / cols)) for c in range(cols + 1)]
 
         pad = int(crop_padding)
-        use_expand = bool(expand_beyond_cell) and mode != "none" and _HAS_SCIPY
+        # 注意不要因为 bg_mode=不处理 就跳过这条路径：那样会退回严格格线切分，
+        # 角色照样被切。定位与输出是两件事，分开处理即可。
+        use_expand = bool(expand_beyond_cell) and _HAS_SCIPY
 
-        def frame_alpha(b):
-            if mode == "white":
-                return _white_to_alpha(rgb_all[b], bg_threshold, edge_softness)
+        def locate_alpha(b):
+            """
+            仅用于圈定角色范围的 alpha。
+            即使用户选了「不处理（输出不透明）」，这里也要照算一份 ——
+            否则无从判断角色到哪儿为止，只能按格线硬切。
+            """
             if mode == "keep" and a_in is not None:
                 return a_in[b]
-            return np.ones((H, W), dtype=np.float32)
+            return _white_to_alpha(rgb_all[b], bg_threshold, edge_softness)
+
+        def frame_alpha(b):
+            """真正写进输出的 alpha。"""
+            if mode == "none":
+                return np.ones((H, W), dtype=np.float32)
+            return locate_alpha(b)
 
         outs, notes = [], []
 
@@ -296,7 +310,7 @@ class RuiEightDirSplit:
             # 第一遍只求包围盒（全图坐标），不留像素，避免整段序列驻留内存
             boxes = [None] * n_dir
             for b in range(B):
-                lab, groups = _assign_blocks(frame_alpha(b), ybnd, xbnd,
+                lab, groups = _assign_blocks(locate_alpha(b), ybnd, xbnd,
                                              cols, fragment_threshold)
                 if lab is None:
                     continue
@@ -331,16 +345,28 @@ class RuiEightDirSplit:
 
             # 第二遍按并集框提取；只保留归属本格的连通块，邻居不会混进来
             for b in range(B):
+                la = locate_alpha(b)
                 af = frame_alpha(b)
-                lab, groups = _assign_blocks(af, ybnd, xbnd, cols, fragment_threshold)
+                lab, groups = _assign_blocks(la, ybnd, xbnd, cols, fragment_threshold)
                 for di, cid in enumerate(cell_ids):
                     y0, y1, x0, x1 = final[di]
-                    outs[di][b, ..., :3] = rgb_all[b, y0:y1, x0:x1]
+                    rgb = rgb_all[b, y0:y1, x0:x1]
                     blk = groups.get(cid) if groups else None
-                    if not blk:
+                    m = (np.isin(lab[y0:y1, x0:x1], blk) if blk
+                         else np.zeros(rgb.shape[:2], dtype=bool))
+
+                    if mode == "none":
+                        # 不透明输出。裁剪框为了不切断角色必然会框进邻居的像素，
+                        # 「原样保留」与「不切断」不可兼得 —— 这里把非本角色的部分
+                        # 合成到白底，既保住完整的角色，也不会混进旁边那位。
+                        a = (locate_alpha(b)[y0:y1, x0:x1] * m)[..., None]
+                        outs[di][b, ..., :3] = rgb * a + (1.0 - a)
+                        outs[di][b, ..., 3] = 1.0
                         continue
-                    m = np.isin(lab[y0:y1, x0:x1], blk)
-                    outs[di][b, ..., 3] = af[y0:y1, x0:x1] * m
+
+                    outs[di][b, ..., :3] = rgb
+                    if blk:
+                        outs[di][b, ..., 3] = af[y0:y1, x0:x1] * m
 
             for di in range(n_dir):
                 y0, y1, x0, x1 = final[di]
