@@ -46,6 +46,23 @@ _BG_ALIAS = {
     "已带透明通道": "keep",
 }
 
+_ALIGN_MODES = {
+    "锚点对齐·统一画布（做游戏必选）": "anchor",
+    "不对齐（各方向独立裁剪）": "none",
+}
+_ANCHORS = {
+    "脚底中心（推荐）": "foot",
+    "包围盒底边中心": "bbox_bottom",
+    "包围盒中心": "bbox_center",
+}
+_ALIGN_SCOPES = {
+    "逐帧对齐·脚底钉死（推荐）": "per_frame",
+    "按方向统一平移（保留帧内起伏）": "per_dir",
+}
+_ANCHOR_LABEL = {
+    "foot": "脚底中心", "bbox_bottom": "包围盒底边中心", "bbox_center": "包围盒中心",
+}
+
 # 与 3×3 中间留空的常见排布对应：行 1 面向观众、行 3 背对观众
 _DEFAULT_NAMES = "SW,S,SE,W,E,NW,N,NE"
 
@@ -98,6 +115,44 @@ def _drop_fragments(alpha, ratio):
     keep = areas >= areas.max() * float(ratio)
     keep[0] = False
     return np.where(keep[lab], alpha, 0.0).astype(np.float32)
+
+
+def _anchor_of(alpha, mode, y0, y1, x0, x1, band_ratio=0.08):
+    """
+    求该帧的锚点（轴心），返回全图坐标 (ax, ay)。
+
+    游戏里角色站在地面上，所以锚点取「脚底中心」最合理：
+      ay = 最低的不透明行（脚底所在高度）
+      ax = 底部窄带内的水平质心
+    x 之所以不用包围盒中心：斗篷、披风、手杖会把包围盒拽向一侧，
+    而这些东西基本不会垂到脚底，取底部窄带就避开了它们。
+    走路时两脚一前一后，窄带质心正好落在两脚之间，即人站立的位置。
+    """
+    if mode == "bbox_center":
+        return ((x0 + x1 - 1) / 2.0, (y0 + y1 - 1) / 2.0)
+    if mode == "bbox_bottom":
+        return ((x0 + x1 - 1) / 2.0, float(y1 - 1))
+    band = max(2, int((y1 - y0) * band_ratio))
+    sub = alpha[max(y0, y1 - band):y1, x0:x1]
+    total = float(sub.sum())
+    if total <= 1e-6:
+        return ((x0 + x1 - 1) / 2.0, float(y1 - 1))
+    col = sub.sum(axis=0)
+    ax = float((col * np.arange(x0, x1)).sum() / total)
+    return (ax, float(y1 - 1))
+
+
+def _paste_anchored(canvas, src, src_anchor, dst_anchor):
+    """把 src(RGBA) 按锚点对齐贴进 canvas，越界部分自动裁掉。"""
+    ox = int(round(dst_anchor[0] - src_anchor[0]))
+    oy = int(round(dst_anchor[1] - src_anchor[1]))
+    H, W = canvas.shape[:2]
+    h, w = src.shape[:2]
+    x0, y0 = max(0, ox), max(0, oy)
+    x1, y1 = min(W, ox + w), min(H, oy + h)
+    if x1 <= x0 or y1 <= y0:
+        return
+    canvas[y0:y1, x0:x1] = src[y0 - oy:y1 - oy, x0 - ox:x1 - ox]
 
 
 def _shrink_alpha(alpha, shrink):
@@ -284,6 +339,40 @@ class RuiEightDirSplit:
                                "对三种 bg_mode 都有效：选「不处理」时也会在内部算一份\n"
                                "白底检测来圈定范围，输出仍保持不透明。"
                 }),
+                "align_mode": (list(_ALIGN_MODES.keys()), {
+                    "default": "锚点对齐·统一画布（做游戏必选）",
+                    "tooltip": "【做游戏素材必选】把 8 个方向对齐到同一张画布上。\n\n"
+                               "不对齐时每个方向各按自己的内容裁剪，尺寸互不相同\n"
+                               "（如 208×328 与 192×323），且角色在各自画面里的位置\n"
+                               "也不一致 —— 游戏里切换朝向时角色就会跳一下。\n\n"
+                               "开启后：所有方向输出同一尺寸，且锚点（默认脚底中心）\n"
+                               "落在画布里的同一个位置，因此切换朝向时角色纹丝不动。\n"
+                               "info 输出里会给出画布尺寸与锚点坐标（含 Unity 归一化\n"
+                               "pivot），照着填进引擎即可。"
+                }),
+                "anchor_type": (list(_ANCHORS.keys()), {
+                    "default": "脚底中心（推荐）",
+                    "tooltip": "用什么当锚点（轴心）。\n\n"
+                               "脚底中心：y 取最低的不透明行，x 取底部窄带的水平质心。\n"
+                               "  角色站在地面上，脚底才是它在世界里的位置，所以这个最合理。\n"
+                               "  x 不用包围盒中心，是因为斗篷、披风、手杖会把包围盒\n"
+                               "  拽向一侧，而它们基本不会垂到脚底。\n"
+                               "包围盒底边中心：省掉质心计算，角色没有大幅外挂物时够用。\n"
+                               "包围盒中心：适合飞行单位、投射物这类不站地面的素材。"
+                }),
+                "align_scope": (list(_ALIGN_SCOPES.keys()), {
+                    "default": "逐帧对齐·脚底钉死（推荐）",
+                    "tooltip": "对齐的粒度，直接影响动画观感。\n\n"
+                               "【逐帧对齐·脚底钉死】每一帧都把自己的锚点钉在同一点，\n"
+                               "  等价于人工「一帧一帧对位置」。\n"
+                               "  行走循环本就该原地播放、位移交给游戏代码，所以\n"
+                               "  sprite 内部不该有整体漂移。AI 生成的视频往往有\n"
+                               "  （本仓库实测同方向跨帧漂移达 22px），这个模式能压到 1px。\n\n"
+                               "【按方向统一平移】同方向所有帧平移同样的距离，\n"
+                               "  保留帧内的重心起伏。方向之间照样对齐。\n"
+                               "  适合角色本来就该有前后摆动的动作（如挥剑、跳跃），\n"
+                               "  或素材本身很干净、不需要修漂移时。"
+                }),
                 "auto_crop": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "按内容裁掉多余空白。\n"
@@ -317,8 +406,12 @@ class RuiEightDirSplit:
     def split(self, images, grid_cols, grid_rows, empty_cells,
               direction_names, bg_mode, bg_threshold, edge_shrink,
               decontaminate, edge_softness, fragment_threshold,
-              expand_beyond_cell, auto_crop, crop_padding, masks=None):
+              expand_beyond_cell, align_mode, anchor_type, align_scope,
+              auto_crop, crop_padding, masks=None):
         mode = _BG_MODES.get(bg_mode) or _BG_ALIAS.get(bg_mode, "white")
+        align_kind = _ALIGN_MODES.get(align_mode, "anchor")
+        anchor_kind = _ANCHORS.get(anchor_type, "foot")
+        align_scope_kind = _ALIGN_SCOPES.get(align_scope, "per_dir")
         B, H, W, C = images.shape
         cols, rows = int(grid_cols), int(grid_rows)
         total = cols * rows
@@ -373,23 +466,109 @@ class RuiEightDirSplit:
 
         if use_expand:
             # ===== 内容自适应：格子只定方向，范围由角色自身的连通块决定 =====
-            # 第一遍只求包围盒（全图坐标），不留像素，避免整段序列驻留内存
+            # 第一遍求包围盒与锚点（全图坐标），不留像素，避免整段序列驻留内存
             boxes = [None] * n_dir
+            fbox = [[None] * B for _ in range(n_dir)]     # 每帧各自的包围盒
+            fanc = [[None] * B for _ in range(n_dir)]     # 每帧各自的锚点
             for b in range(B):
-                lab, groups = _assign_blocks(locate_alpha(b), ybnd, xbnd,
-                                             cols, fragment_threshold)
+                la = locate_alpha(b)
+                lab, groups = _assign_blocks(la, ybnd, xbnd, cols,
+                                             fragment_threshold)
                 if lab is None:
                     continue
                 for di, cid in enumerate(cell_ids):
                     blk = groups.get(cid)
                     if not blk:
                         continue
-                    bb = _bbox(np.isin(lab, blk).astype(np.float32), 0.5)
+                    m = np.isin(lab, blk)
+                    bb = _bbox(m.astype(np.float32), 0.5)
                     if bb is None:
                         continue
+                    fbox[di][b] = bb
+                    fanc[di][b] = _anchor_of(la * m, anchor_kind, *bb)
                     boxes[di] = bb if boxes[di] is None else (
                         min(boxes[di][0], bb[0]), max(boxes[di][1], bb[1]),
                         min(boxes[di][2], bb[2]), max(boxes[di][3], bb[3]))
+
+            # ---- 锚点对齐：所有方向输出同一尺寸，且锚点落在画布同一位置 ----
+            if align_kind == "anchor":
+                # 方向代表锚点取中位数：个别帧抠图不稳也不会把整个方向带偏
+                rep = []
+                for di in range(n_dir):
+                    aa = [a for a in fanc[di] if a is not None]
+                    rep.append((float(np.median([a[0] for a in aa])),
+                                float(np.median([a[1] for a in aa])))
+                               if aa else None)
+
+                # 以锚点为原点，统计所有方向、所有帧向四周的最大延展
+                L = R = T = Bt = 0.0
+                for di in range(n_dir):
+                    if rep[di] is None or boxes[di] is None:
+                        continue
+                    if align_scope_kind == "per_dir":
+                        pairs = [(boxes[di], rep[di])]
+                    else:
+                        pairs = [(fbox[di][b], fanc[di][b]) for b in range(B)
+                                 if fbox[di][b] is not None]
+                    for bb, an in pairs:
+                        L = max(L, an[0] - bb[2])
+                        R = max(R, bb[3] - 1 - an[0])
+                        T = max(T, an[1] - bb[0])
+                        Bt = max(Bt, bb[1] - 1 - an[1])
+
+                cw = int(np.ceil(L + R)) + 1 + 2 * pad
+                ch = int(np.ceil(T + Bt)) + 1 + 2 * pad
+                canvas_anchor = (pad + L, pad + T)
+                outs = [np.zeros((B, ch, cw, 4), dtype=np.float32)
+                        for _ in range(n_dir)]
+
+                for b in range(B):
+                    la = locate_alpha(b)
+                    af = frame_alpha(b)
+                    lab, groups = _assign_blocks(la, ybnd, xbnd, cols,
+                                                 fragment_threshold)
+                    for di, cid in enumerate(cell_ids):
+                        bb = fbox[di][b]
+                        blk = groups.get(cid) if groups else None
+                        if bb is None or not blk:
+                            continue
+                        y0, y1, x0, x1 = bb
+                        rgb = rgb_all[b, y0:y1, x0:x1]
+                        m = np.isin(lab[y0:y1, x0:x1], blk)
+                        src = np.zeros((y1 - y0, x1 - x0, 4), dtype=np.float32)
+                        if mode == "none":
+                            a = (la[y0:y1, x0:x1] * m)[..., None]
+                            src[..., :3] = rgb * a + (1.0 - a)
+                            src[..., 3] = 1.0
+                        else:
+                            ac = _shrink_alpha(af[y0:y1, x0:x1] * m, edge_shrink)
+                            src[..., :3] = _decontaminate(rgb, ac, decontaminate)
+                            src[..., 3] = ac
+                        # per_dir 用方向代表锚点：源是全图坐标系，各帧都把同一个
+                        # 全图点对齐到画布锚点，等价于整方向平移同样的距离，
+                        # 因此帧间的自然起伏被原样保留。
+                        an = rep[di] if align_scope_kind == "per_dir" else fanc[di][b]
+                        _paste_anchored(outs[di][b], src,
+                                        (an[0] - x0, an[1] - y0), canvas_anchor)
+
+                for di in range(n_dir):
+                    notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]}")
+                    outs[di] = torch.from_numpy(outs[di])
+                align_note = (
+                    f"\n统一画布 {cw}×{ch}，锚点({_ANCHOR_LABEL.get(anchor_kind, anchor_kind)})"
+                    f"位于 ({canvas_anchor[0]:.1f}, {canvas_anchor[1]:.1f})"
+                    f"\nUnity/Godot 归一化 pivot（左下为原点）："
+                    f"({canvas_anchor[0] / cw:.4f}, {1.0 - canvas_anchor[1] / ch:.4f})"
+                    f"\n对齐粒度：{align_scope}")
+                info = (f"输入 {B} 帧 {W}×{H} → {cols}×{rows} 网格，"
+                        f"空格 {sorted(empties) if empties else '无'}，"
+                        f"得到 {n_dir} 个方向 × {B} 帧\n"
+                        + " | ".join(notes) + align_note)
+                print(f"[Ruinode-8Dir] {info}")
+                blank = torch.zeros((1, 8, 8, 4), dtype=torch.float32)
+                result = [outs[i] if i < len(outs) else blank
+                          for i in range(MAX_DIRS)]
+                return tuple(result) + (info,)
 
             # 没有 auto_crop 时退回该格的格线范围，仍允许块超界的像素带出来
             final = []
