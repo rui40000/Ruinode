@@ -1,14 +1,14 @@
 {
  "id": "5f8c3d21-7b94-4e06-a1d8-9c2e4b7f350a",
  "revision": 0,
- "last_node_id": 19,
- "last_link_id": 17,
+ "last_node_id": 20,
+ "last_link_id": 19,
  "nodes": [
   {
    "id": 1,
    "type": "VHS_LoadVideo",
    "pos": [
-    -2260,
+    -2680,
     340
    ],
    "size": [
@@ -24,7 +24,8 @@
      "name": "IMAGE",
      "type": "IMAGE",
      "links": [
-      1
+      1,
+      2
      ]
     },
     {
@@ -61,23 +62,80 @@
   },
   {
    "id": 2,
-   "type": "RuiEightDirSplit",
+   "type": "RuiLucida",
    "pos": [
-    -1850,
+    -2270,
     340
    ],
    "size": [
-    360,
-    320
+    340,
+    250
    ],
    "flags": {},
    "order": 1,
    "mode": 0,
    "inputs": [
     {
-     "name": "images",
+     "name": "image",
      "type": "IMAGE",
      "link": 1
+    }
+   ],
+   "outputs": [
+    {
+     "name": "alpha",
+     "type": "MASK",
+     "links": [
+      3
+     ]
+    },
+    {
+     "name": "cutout",
+     "type": "IMAGE",
+     "links": []
+    }
+   ],
+   "properties": {
+    "aux_id": "rui40000/Ruinode",
+    "Node name for S&R": "RuiLucida"
+   },
+   "widgets_values": [
+    "lucida.safetensors",
+    "fp16",
+    "auto",
+    0.5,
+    1.0,
+    false,
+    false
+   ],
+   "color": "#232",
+   "bgcolor": "#353",
+   "title": "② Lucida 抠图（一次抠整张，8 个角色都能识别）"
+  },
+  {
+   "id": 3,
+   "type": "RuiEightDirSplit",
+   "pos": [
+    -1860,
+    340
+   ],
+   "size": [
+    380,
+    400
+   ],
+   "flags": {},
+   "order": 2,
+   "mode": 0,
+   "inputs": [
+    {
+     "name": "images",
+     "type": "IMAGE",
+     "link": 2
+    },
+    {
+     "name": "masks",
+     "type": "MASK",
+     "link": 3
     }
    ],
    "outputs": [
@@ -85,20 +143,12 @@
      "name": "dir_1",
      "type": "IMAGE",
      "links": [
-      2,
-      3
-     ]
-    },
-    {
-     "name": "dir_2",
-     "type": "IMAGE",
-     "links": [
       4,
       5
      ]
     },
     {
-     "name": "dir_3",
+     "name": "dir_2",
      "type": "IMAGE",
      "links": [
       6,
@@ -106,7 +156,7 @@
      ]
     },
     {
-     "name": "dir_4",
+     "name": "dir_3",
      "type": "IMAGE",
      "links": [
       8,
@@ -114,7 +164,7 @@
      ]
     },
     {
-     "name": "dir_5",
+     "name": "dir_4",
      "type": "IMAGE",
      "links": [
       10,
@@ -122,7 +172,7 @@
      ]
     },
     {
-     "name": "dir_6",
+     "name": "dir_5",
      "type": "IMAGE",
      "links": [
       12,
@@ -130,7 +180,7 @@
      ]
     },
     {
-     "name": "dir_7",
+     "name": "dir_6",
      "type": "IMAGE",
      "links": [
       14,
@@ -138,11 +188,19 @@
      ]
     },
     {
-     "name": "dir_8",
+     "name": "dir_7",
      "type": "IMAGE",
      "links": [
       16,
       17
+     ]
+    },
+    {
+     "name": "dir_8",
+     "type": "IMAGE",
+     "links": [
+      18,
+      19
      ]
     },
     {
@@ -160,23 +218,25 @@
     3,
     "4",
     "SW,S,SE,W,E,NW,N,NE",
-    "白底转透明（推荐）",
+    "已带透明通道（推荐·上游接抠图节点）",
     0.92,
+    0.2,
+    1.0,
     1.0,
     0.05,
     true,
     true,
-    8
+    16
    ],
    "color": "#232",
    "bgcolor": "#353",
-   "title": "② 八方向拆分（拆分+编号+分组）"
+   "title": "③ 八方向拆分（拆分+编号+分组）"
   },
   {
-   "id": 3,
+   "id": 4,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     -160
    ],
    "size": [
@@ -184,13 +244,13 @@
     460
    ],
    "flags": {},
-   "order": 2,
+   "order": 3,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 2
+     "link": 4
     },
     {
      "name": "audio",
@@ -235,10 +295,10 @@
    "title": "1. SW → 透明 webm"
   },
   {
-   "id": 4,
+   "id": 5,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     -160
    ],
    "size": [
@@ -246,13 +306,13 @@
     300
    ],
    "flags": {},
-   "order": 3,
+   "order": 4,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 3
+     "link": 5
     }
    ],
    "outputs": [],
@@ -267,10 +327,10 @@
    "title": "1. SW → 透明 PNG 序列帧"
   },
   {
-   "id": 5,
+   "id": 6,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     170
    ],
    "size": [
@@ -278,13 +338,13 @@
     460
    ],
    "flags": {},
-   "order": 4,
+   "order": 5,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 4
+     "link": 6
     },
     {
      "name": "audio",
@@ -327,10 +387,10 @@
    "title": "2. S → 透明 webm"
   },
   {
-   "id": 6,
+   "id": 7,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     170
    ],
    "size": [
@@ -338,13 +398,13 @@
     300
    ],
    "flags": {},
-   "order": 5,
+   "order": 6,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 5
+     "link": 7
     }
    ],
    "outputs": [],
@@ -359,10 +419,10 @@
    "title": "2. S → 透明 PNG 序列帧"
   },
   {
-   "id": 7,
+   "id": 8,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     500
    ],
    "size": [
@@ -370,13 +430,13 @@
     460
    ],
    "flags": {},
-   "order": 6,
+   "order": 7,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 6
+     "link": 8
     },
     {
      "name": "audio",
@@ -419,10 +479,10 @@
    "title": "3. SE → 透明 webm"
   },
   {
-   "id": 8,
+   "id": 9,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     500
    ],
    "size": [
@@ -430,13 +490,13 @@
     300
    ],
    "flags": {},
-   "order": 7,
+   "order": 8,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 7
+     "link": 9
     }
    ],
    "outputs": [],
@@ -451,10 +511,10 @@
    "title": "3. SE → 透明 PNG 序列帧"
   },
   {
-   "id": 9,
+   "id": 10,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     830
    ],
    "size": [
@@ -462,13 +522,13 @@
     460
    ],
    "flags": {},
-   "order": 8,
+   "order": 9,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 8
+     "link": 10
     },
     {
      "name": "audio",
@@ -511,10 +571,10 @@
    "title": "4. W → 透明 webm"
   },
   {
-   "id": 10,
+   "id": 11,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     830
    ],
    "size": [
@@ -522,13 +582,13 @@
     300
    ],
    "flags": {},
-   "order": 9,
+   "order": 10,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 9
+     "link": 11
     }
    ],
    "outputs": [],
@@ -543,10 +603,10 @@
    "title": "4. W → 透明 PNG 序列帧"
   },
   {
-   "id": 11,
+   "id": 12,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     1160
    ],
    "size": [
@@ -554,13 +614,13 @@
     460
    ],
    "flags": {},
-   "order": 10,
+   "order": 11,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 10
+     "link": 12
     },
     {
      "name": "audio",
@@ -603,10 +663,10 @@
    "title": "5. E → 透明 webm"
   },
   {
-   "id": 12,
+   "id": 13,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     1160
    ],
    "size": [
@@ -614,13 +674,13 @@
     300
    ],
    "flags": {},
-   "order": 11,
+   "order": 12,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 11
+     "link": 13
     }
    ],
    "outputs": [],
@@ -635,10 +695,10 @@
    "title": "5. E → 透明 PNG 序列帧"
   },
   {
-   "id": 13,
+   "id": 14,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     1490
    ],
    "size": [
@@ -646,13 +706,13 @@
     460
    ],
    "flags": {},
-   "order": 12,
+   "order": 13,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 12
+     "link": 14
     },
     {
      "name": "audio",
@@ -695,10 +755,10 @@
    "title": "6. NW → 透明 webm"
   },
   {
-   "id": 14,
+   "id": 15,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     1490
    ],
    "size": [
@@ -706,13 +766,13 @@
     300
    ],
    "flags": {},
-   "order": 13,
+   "order": 14,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 13
+     "link": 15
     }
    ],
    "outputs": [],
@@ -727,10 +787,10 @@
    "title": "6. NW → 透明 PNG 序列帧"
   },
   {
-   "id": 15,
+   "id": 16,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     1820
    ],
    "size": [
@@ -738,13 +798,13 @@
     460
    ],
    "flags": {},
-   "order": 14,
+   "order": 15,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 14
+     "link": 16
     },
     {
      "name": "audio",
@@ -787,10 +847,10 @@
    "title": "7. N → 透明 webm"
   },
   {
-   "id": 16,
+   "id": 17,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     1820
    ],
    "size": [
@@ -798,13 +858,13 @@
     300
    ],
    "flags": {},
-   "order": 15,
+   "order": 16,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 15
+     "link": 17
     }
    ],
    "outputs": [],
@@ -819,10 +879,10 @@
    "title": "7. N → 透明 PNG 序列帧"
   },
   {
-   "id": 17,
+   "id": 18,
    "type": "VHS_VideoCombine",
    "pos": [
-    -1380,
+    -1400,
     2150
    ],
    "size": [
@@ -830,13 +890,13 @@
     460
    ],
    "flags": {},
-   "order": 16,
+   "order": 17,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 16
+     "link": 18
     },
     {
      "name": "audio",
@@ -879,10 +939,10 @@
    "title": "8. NE → 透明 webm"
   },
   {
-   "id": 18,
+   "id": 19,
    "type": "SaveImage",
    "pos": [
-    -1020,
+    -1040,
     2150
    ],
    "size": [
@@ -890,13 +950,13 @@
     300
    ],
    "flags": {},
-   "order": 17,
+   "order": 18,
    "mode": 0,
    "inputs": [
     {
      "name": "images",
      "type": "IMAGE",
-     "link": 17
+     "link": 19
     }
    ],
    "outputs": [],
@@ -911,24 +971,24 @@
    "title": "8. NE → 透明 PNG 序列帧"
   },
   {
-   "id": 19,
+   "id": 20,
    "type": "Note",
    "pos": [
-    -2260,
+    -2680,
     880
    ],
    "size": [
-    700,
-    900
+    740,
+    1120
    ],
    "flags": {},
-   "order": 18,
+   "order": 19,
    "mode": 0,
    "inputs": [],
    "outputs": [],
    "properties": {},
    "widgets_values": [
-    "八方向行走动画 —— 完整管线\n\n【前置步骤（在本工作流之外完成）】\n  角色图 →(GPTimage2)→ 八方向静态图 →(Seedance 首尾帧)→ 循环行走视频\n  视频每一帧上都排布着 8 个朝向的角色。\n\n【本工作流做的事】\n  ① VHS「Load Video」把视频转成序列帧\n     · force_rate 就是帧率选择。设 0 用源视频帧率；\n       设 12 可减半出帧、素材更小，走路动画通常 8~12 帧一循环就够\n     · frame_load_cap 可限制总帧数，先小批量试参数很有用\n  ② 本仓库「八方向序列拆分」：切格 + 编号 + 按方向分组，一次给出 8 条序列\n  ③ 每个方向各接一个 VHS「Video Combine」出透明 webm\n  ④ 每个方向各接一个 SaveImage 出透明 PNG 序列帧\n\n【拆分节点的关键参数】\n  · grid_cols / grid_rows / empty_cells\n      3×3 中间留空即 empty_cells=4。序号行优先、从 0 开始。\n  · direction_names\n      按「跳过空格后的先后顺序」命名，默认对应下面这个排布：\n          SW  S  SE      ← 行1：面向观众\n          W      E       ← 行2：侧面\n          NW  N  NE      ← 行3：背对观众\n      与你的素材不符就直接改这行，名字只影响标注不影响画面。\n  · bg_mode / bg_threshold\n      白底转透明。只把「与画面边缘相连」的白色判为背景，\n      所以角色身上的白衬衫、白高光不会被掏空。\n      背景没扣净就调低阈值，角色边缘被啃就调高。\n  · expand_beyond_cell（务必开启）\n      允许角色超出格子边界。关闭时按格线严格切分，角色只要探出格线\n      就会被切断（最典型的是脚被削掉）。开启后格子只用来判定方向，\n      实际范围由角色自身的连通区域决定。\n  · auto_crop\n      裁掉多余空白。裁剪框取该方向所有帧的并集，\n      因此整条序列尺寸一致（能合成视频），角色也不会在帧间跳动。\n\n【为什么不用连通区域拆分（本仓库的「素材拆分」节点）】\n  那个节点按包围盒排序，角色走动时位置浮动，一旦跨过排序行界方向就会错乱；\n  且每个 sprite 按各自 bbox 裁剪、尺寸不一，无法直接合成视频。\n  固定网格没有这两个问题 —— 但它更适合单张静态合图，两者各有用途。\n\n【webm 透明的关键】\n  Video Combine 的 format 必须选 video/webm，且 pix_fmt 选 yuva420p。\n  注意：alpha 存放在 WebM 的独立边带里，所以用 ffprobe 看主流会显示\n  yuv420p，这是正常的。播放器/引擎（走 libvpx 解码）能正确读到透明通道；\n  若要用 ffmpeg 自行验证，需显式加 -c:v libvpx-vp9 解码，\n  否则内置 vp9 解码器不会输出 alpha，会让人误以为透明丢了。\n\n【实测（97 帧 834×1112 的素材）】\n  拆分耗时约 4 秒，8 个方向各 97 帧，尺寸 172×370 ~ 206×327。"
+    "八方向行走动画 —— 完整管线\n\n【前置步骤（在本工作流之外完成）】\n  角色图 →(GPTimage2)→ 八方向静态图 →(Seedance 首尾帧)→ 循环行走视频\n  视频每一帧上都排布着 8 个朝向的角色。\n\n【本工作流做的事】\n  ① VHS「Load Video」把视频转成序列帧\n     · force_rate 就是帧率选择。设 0 用源视频帧率；\n       设 12 可减半出帧、素材更小，走路动画通常 8~12 帧一循环就够\n     · frame_load_cap 可限制总帧数，先小批量试参数很有用\n  ② Lucida 抠图，为拆分提供语义级 alpha（见下方「为什么要接抠图节点」）\n  ③ 八方向拆分：切格 + 编号 + 按方向分组，一次给出 8 条序列\n  ④ 每个方向各接一个 VHS「Video Combine」出透明 webm\n  ⑤ 每个方向各接一个 SaveImage 出透明 PNG 序列帧\n\n■ 为什么要接抠图节点，而不是让拆分节点自己扣白底 ————\n\n拆分节点自带的「白底转透明」是纯颜色阈值法：按「离白色多远」估 alpha。\n它的死穴是角色身上的白色衣物 —— 白衬衫本身就接近白，alpha 天生偏低，\n一旦收边压白边，衬衫就会被啃出破洞（实测会看到背景色透过衣服）。\n\nLucida 是按语义判断的，知道那是衣服而不是背景。实测（同一素材、\n同等白边水平）：主体被啃掉的面积比阈值法少 35%，白衬衫完好。\nLucida 一次就能把整张雪碧图的 8 个角色全部识别出来\n（各格前景占比 0.18~0.24，中间空格 0.002）。\n\n素材里确实没有白色元素时，可以把 bg_mode 改成「白底转透明」省掉模型开销；\n此时 edge_shrink 要调到 0.35 以上才压得住白边。\n\n■ 治白边的两个参数 ————————————————————\n\n  · edge_shrink（主力）把边缘那圈几乎全是背景的半透明像素收掉。\n      配模型 alpha 用 0.15~0.25；配阈值法要 0.35+。\n      实测：0 → 白边强度 0.048；0.2 → 0.026；0.5 → 0.016。\n  · decontaminate（辅助）颜色反溢出，按\n      观察色 = 前景×a + 白×(1-a) 反解真正的前景色。\n      单独用改善很小（约 3%），要和收边配合。\n\n■ 拆分节点的其他关键参数 ————————————————\n\n  · grid_cols / grid_rows / empty_cells\n      3×3 中间留空即 empty_cells=4。序号行优先、从 0 开始。\n  · direction_names\n      按「跳过空格后的先后顺序」命名，默认对应：\n          SW  S  SE      ← 行1：面向观众\n          W      E       ← 行2：侧面\n          NW  N  NE      ← 行3：背对观众\n      与素材不符就直接改这行，名字只影响标注不影响画面。\n  · expand_beyond_cell（务必开启）\n      允许角色超出格子边界。关闭时按格线严格切分，角色只要探出格线\n      就会被切断（最典型的是脚被削掉）。开启后格子只用来判定方向，\n      实际范围由角色自身的连通区域决定。三种 bg_mode 都有效。\n  · auto_crop\n      裁剪框取该方向所有帧的并集，因此整条序列尺寸一致（能合成视频），\n      角色也不会在帧间跳动。\n\n■ webm 透明的关键 ————————————————————\n\n  Video Combine 的 format 必须选 video/webm，pix_fmt 必须选 yuva420p。\n  注意：alpha 存放在 WebM 的独立边带里，用 ffprobe 看主流会显示 yuv420p，\n  这是正常的。播放器/引擎（走 libvpx 解码）能正确读到透明通道；\n  若要用 ffmpeg 自行验证，需显式加 -c:v libvpx-vp9 解码，\n  否则内置 vp9 解码器不输出 alpha，会让人误以为透明丢了。"
    ],
    "color": "#432",
    "bgcolor": "#653"
@@ -945,7 +1005,7 @@
   ],
   [
    2,
-   2,
+   1,
    0,
    3,
    0,
@@ -955,119 +1015,135 @@
    3,
    2,
    0,
-   4,
-   0,
-   "IMAGE"
-  ],
-  [
-   4,
-   2,
+   3,
    1,
-   5,
+   "MASK"
+  ],
+  [
+   4,
+   3,
+   0,
+   4,
    0,
    "IMAGE"
   ],
   [
    5,
-   2,
+   3,
+   0,
+   5,
+   0,
+   "IMAGE"
+  ],
+  [
+   6,
+   3,
    1,
    6,
    0,
    "IMAGE"
   ],
   [
-   6,
-   2,
-   2,
+   7,
+   3,
+   1,
    7,
    0,
    "IMAGE"
   ],
   [
-   7,
-   2,
+   8,
+   3,
    2,
    8,
    0,
    "IMAGE"
   ],
   [
-   8,
-   2,
+   9,
    3,
+   2,
    9,
    0,
    "IMAGE"
   ],
   [
-   9,
-   2,
+   10,
+   3,
    3,
    10,
    0,
    "IMAGE"
   ],
   [
-   10,
-   2,
-   4,
+   11,
+   3,
+   3,
    11,
    0,
    "IMAGE"
   ],
   [
-   11,
-   2,
+   12,
+   3,
    4,
    12,
    0,
    "IMAGE"
   ],
   [
-   12,
-   2,
-   5,
+   13,
+   3,
+   4,
    13,
    0,
    "IMAGE"
   ],
   [
-   13,
-   2,
+   14,
+   3,
    5,
    14,
    0,
    "IMAGE"
   ],
   [
-   14,
-   2,
-   6,
+   15,
+   3,
+   5,
    15,
    0,
    "IMAGE"
   ],
   [
-   15,
-   2,
+   16,
+   3,
    6,
    16,
    0,
    "IMAGE"
   ],
   [
-   16,
-   2,
-   7,
+   17,
+   3,
+   6,
    17,
    0,
    "IMAGE"
   ],
   [
-   17,
-   2,
+   18,
+   3,
    7,
    18,
+   0,
+   "IMAGE"
+  ],
+  [
+   19,
+   3,
+   7,
+   19,
    0,
    "IMAGE"
   ]
@@ -1076,9 +1152,9 @@
  "config": {},
  "extra": {
   "ds": {
-   "scale": 0.55,
+   "scale": 0.5,
    "offset": [
-    2400,
+    2820,
     100
    ]
   }

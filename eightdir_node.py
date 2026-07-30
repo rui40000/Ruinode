@@ -34,9 +34,16 @@ except Exception:                                   # 理论上 ComfyUI 环境�
 MAX_DIRS = 8
 
 _BG_MODES = {
+    # 键名直接把取舍写清楚：颜色阈值法快但会啃掉白色衣物，
+    # 接模型抠图才是干净的做法（实测对比见 README）
+    "已带透明通道（推荐·上游接抠图节点）": "keep",
+    "白底转透明（快，但白色衣物会被啃）": "white",
+    "不处理（输出不透明）": "none",
+}
+# 早先版本保存的工作流里的旧选项名，不进下拉、只做解析兼容
+_BG_ALIAS = {
     "白底转透明（推荐）": "white",
     "已带透明通道": "keep",
-    "不处理（输出不透明）": "none",
 }
 
 # 与 3×3 中间留空的常见排布对应：行 1 面向观众、行 3 背对观众
@@ -91,6 +98,40 @@ def _drop_fragments(alpha, ratio):
     keep = areas >= areas.max() * float(ratio)
     keep[0] = False
     return np.where(keep[lab], alpha, 0.0).astype(np.float32)
+
+
+def _shrink_alpha(alpha, shrink):
+    """
+    把边缘那圈「几乎全是背景」的半透明像素收掉。
+
+    白底图上，角色边缘的抗锯齿像素本就是前景与白色的混合，而从单张图
+    反推 alpha 是欠定问题（一个方程多个未知数），浅色边缘的 alpha 往往
+    被估低，于是残留一圈混了白的半透明像素——合成到深色背景就是白边。
+    这里把 alpha 低于 shrink 的判为背景，其余重新拉伸到满值，
+    相当于平滑地向内收一点边，比形态学腐蚀不容易产生锯齿。
+    """
+    if shrink <= 0:
+        return alpha
+    s = min(0.95, float(shrink))
+    return np.clip((alpha - s) / (1.0 - s), 0.0, 1.0).astype(np.float32)
+
+
+def _decontaminate(rgb, alpha, strength, bg=1.0):
+    """
+    颜色反溢出：把混进边缘像素的背景色剥掉。
+
+    观察色 = 前景色 × a + 背景色 × (1-a)，于是
+        前景色 = (观察色 - 背景色 × (1-a)) / a
+    不做这一步，边缘像素的 RGB 里就一直掺着白，贴到深色背景上必然发白。
+    a 极小时该式会放大噪声，故对分母设下限。
+    """
+    if strength <= 0:
+        return rgb
+    a = alpha[..., None]
+    fg = (rgb - bg * (1.0 - a)) / np.maximum(a, 0.08)
+    fg = np.clip(fg, 0.0, 1.0)
+    s = float(min(1.0, strength))
+    return (rgb * (1.0 - s) + fg * s).astype(np.float32)
 
 
 def _assign_blocks(alpha_full, ybnd, xbnd, cols, frag_ratio):
@@ -186,15 +227,40 @@ class RuiEightDirSplit:
                                "名字只用于 info 与你自己辨认，不影响画面内容。"
                 }),
                 "bg_mode": (list(_BG_MODES.keys()), {
-                    "default": "白底转透明（推荐）",
-                    "tooltip": "webm 要保留透明就必须先把白底转成 alpha。\n"
-                               "转换只把与画面边缘相连的白色判为背景，\n"
-                               "角色身上的白衣服、白高光会被保留。"
+                    "default": "已带透明通道（推荐·上游接抠图节点）",
+                    "tooltip": "webm 要保留透明就必须先有 alpha。三种来源：\n\n"
+                               "【已带透明通道】把上游抠图节点（Lucida / FeyNobg）的\n"
+                               "  遮罩接到 masks 输入。**强烈推荐**：模型是按语义判断的，\n"
+                               "  白衣服不会被误判成背景。实测同等白边水平下，\n"
+                               "  主体被啃掉的面积比阈值法少 35%。\n"
+                               "  没接 masks 时会自动退回颜色阈值法，不会报错。\n\n"
+                               "【白底转透明】纯颜色阈值 + 边缘连通性判断，不需要模型、\n"
+                               "  很快。但它靠「离白色多远」估 alpha，角色身上的白色衣物\n"
+                               "  天生 alpha 偏低，收边时会被啃出破洞 —— 素材里有白衣服、\n"
+                               "  白高光时别用这个。\n\n"
+                               "【不处理】输出不透明。仍会按角色范围裁剪、不切断。"
                 }),
                 "bg_threshold": ("FLOAT", {
                     "default": 0.92, "min": 0.5, "max": 1.0, "step": 0.005,
                     "tooltip": "白底判定阈值：像素三通道最小值高于它才算「接近白」。\n"
                                "背景没扣干净就调低，角色边缘被啃掉就调高。"
+                }),
+                "edge_shrink": ("FLOAT", {
+                    "default": 0.2, "min": 0.0, "max": 0.95, "step": 0.01,
+                    "tooltip": "【治白边的主力参数】把边缘那圈「几乎全是背景」的\n"
+                               "半透明像素收掉，相当于平滑地向内收一点边。\n"
+                               "白底素材的边缘像素本就掺了白，不收掉贴到深色背景就发白。\n\n"
+                               "配模型 alpha（bg_mode=已带透明通道）：0.15~0.25 就够。\n"
+                               "配颜色阈值法：要 0.35 以上才压得住白边，代价是白色衣物\n"
+                               "  会被啃出破洞 —— 这也是推荐用模型 alpha 的原因。\n"
+                               "0 = 完全不收（白边明显）。"
+                }),
+                "decontaminate": ("FLOAT", {
+                    "default": 1.0, "min": 0.0, "max": 1.0, "step": 0.05,
+                    "tooltip": "【治白边的第二道】颜色反溢出：把混进边缘像素的白色剥掉。\n"
+                               "原理是按 观察色 = 前景×a + 白×(1-a) 反解出真正的前景色。\n"
+                               "1.0 = 完全反解（推荐），0 = 不处理。\n"
+                               "与上面的收边配合使用，单靠任一个都不够干净。"
                 }),
                 "edge_softness": ("FLOAT", {
                     "default": 1.0, "min": 0.1, "max": 4.0, "step": 0.05,
@@ -249,10 +315,10 @@ class RuiEightDirSplit:
         return True
 
     def split(self, images, grid_cols, grid_rows, empty_cells,
-              direction_names, bg_mode, bg_threshold, edge_softness,
-              fragment_threshold, expand_beyond_cell, auto_crop, crop_padding,
-              masks=None):
-        mode = _BG_MODES.get(bg_mode, "white")
+              direction_names, bg_mode, bg_threshold, edge_shrink,
+              decontaminate, edge_softness, fragment_threshold,
+              expand_beyond_cell, auto_crop, crop_padding, masks=None):
+        mode = _BG_MODES.get(bg_mode) or _BG_ALIAS.get(bg_mode, "white")
         B, H, W, C = images.shape
         cols, rows = int(grid_cols), int(grid_rows)
         total = cols * rows
@@ -364,9 +430,12 @@ class RuiEightDirSplit:
                         outs[di][b, ..., 3] = 1.0
                         continue
 
-                    outs[di][b, ..., :3] = rgb
                     if blk:
-                        outs[di][b, ..., 3] = af[y0:y1, x0:x1] * m
+                        ac = _shrink_alpha(af[y0:y1, x0:x1] * m, edge_shrink)
+                        outs[di][b, ..., :3] = _decontaminate(rgb, ac, decontaminate)
+                        outs[di][b, ..., 3] = ac
+                    else:
+                        outs[di][b, ..., :3] = rgb
 
             for di in range(n_dir):
                 y0, y1, x0, x1 = final[di]
@@ -404,8 +473,13 @@ class RuiEightDirSplit:
                     y0, y1, x0, x1 = 0, ch, 0, cw
                 stack = np.empty((len(frames), y1 - y0, x1 - x0, 4), dtype=np.float32)
                 for fi, (rgb, alpha) in enumerate(frames):
-                    stack[fi, ..., :3] = rgb[y0:y1, x0:x1]
-                    stack[fi, ..., 3] = alpha[y0:y1, x0:x1]
+                    rc = rgb[y0:y1, x0:x1]
+                    ac = alpha[y0:y1, x0:x1]
+                    if mode != "none":
+                        ac = _shrink_alpha(ac, edge_shrink)
+                        rc = _decontaminate(rc, ac, decontaminate)
+                    stack[fi, ..., :3] = rc
+                    stack[fi, ..., 3] = ac
                 outs.append(torch.from_numpy(stack))
                 notes.append(f"{di + 1}.{names[di]} 格{cell_ids[di]} "
                              f"{x1 - x0}×{y1 - y0}")
