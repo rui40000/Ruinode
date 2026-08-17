@@ -1201,8 +1201,10 @@ Unity/Godot 归一化 pivot（左下为原点）：(0.5411, 0.0699)
 **输入参数**:
 - `image` (IMAGE): 待去底图像，支持批量（序列帧/视频帧逐帧处理）
 - `bg_color` (STRING): 要去除的背景色，`#RRGGBB`。常用 `#000000` / `#FFFFFF` / `#00FF00` / `#FF00FF`
-- `alpha_low` (FLOAT): 黑点，低于此值的 alpha 归零，用于清除背景残留噪点
-- `alpha_high` (FLOAT): 白点，高于此值的 alpha 归一，用于让主体更实
+- `黑点` (FLOAT, 滑块): 低于此值的 alpha 归零，用于清除背景残留噪点。调太高会丢边缘细节
+- `白点` (FLOAT, 滑块): 高于此值的 alpha 归一，用于让主体更实。调太低会让边缘硬化
+
+后两项用中文参数名 + `display: slider`，界面上就是两条滑块，与 LayerStyle 的 BiRefNet Ultra 观感一致。函数内部用 `**kwargs` 接收（中文名不能直接做函数形参），并兼容旧的 `alpha_low`/`alpha_high` 调用。
 
 **输出**: `rgba_image` (IMAGE，4 通道) / `alpha` (MASK)
 

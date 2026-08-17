@@ -82,13 +82,18 @@ class RuiUnmult:
                                "常用值：#000000（黑底）、#FFFFFF（白底）、"
                                "#00FF00（绿幕）、#FF00FF（品红）。"
                 }),
-                "alpha_low": ("FLOAT", {
+                # 用中文参数名 + display:slider，界面上就是「黑点／白点」两条滑块，
+                # 与 LayerStyle 的 BiRefNet Ultra 观感一致。
+                # 中文名不能直接做函数形参，故 unmult() 统一用 **kwargs 接收。
+                "黑点": ("FLOAT", {
                     "default": 0.0, "min": 0.0, "max": 0.5, "step": 0.01,
+                    "display": "slider",
                     "tooltip": "黑点（主体保护）：低于此值的 alpha 强制归零。\n"
                                "调高可清除背景残留噪点，但过高会丢失边缘细节。"
                 }),
-                "alpha_high": ("FLOAT", {
+                "白点": ("FLOAT", {
                     "default": 1.0, "min": 0.3, "max": 1.0, "step": 0.01,
+                    "display": "slider",
                     "tooltip": "白点（主体保护）：高于此值的 alpha 强制归一。\n"
                                "调低可让主体更实、减少半透明损失，但过低会让边缘硬化。"
                 }),
@@ -100,7 +105,14 @@ class RuiUnmult:
     FUNCTION = "unmult"
     CATEGORY = "Rui-Node🐶/抠图✂️"
 
-    def unmult(self, image, bg_color, alpha_low, alpha_high):
+    def unmult(self, **kwargs):
+        # 「黑点／白点」是中文参数名，无法直接写进函数签名，统一从 kwargs 取。
+        # 同时兼容旧的英文名，避免早先保存的工作流失配。
+        image = kwargs.get("image")
+        bg_color = kwargs.get("bg_color", "#000000")
+        alpha_low = kwargs.get("黑点", kwargs.get("alpha_low", 0.0))
+        alpha_high = kwargs.get("白点", kwargs.get("alpha_high", 1.0))
+
         bg_rgb = _hex_to_rgb01(bg_color)
 
         B, H, W, C = image.shape
