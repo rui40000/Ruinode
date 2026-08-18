@@ -11,6 +11,7 @@
 
 AI 主体保护（可选）：接入 BiRefNet / FeyNobg 等抠图节点输出的 subject_mask，
 用 max(unmult_α, subject_mask) 合并，防止主体中与背景色相近的区域被误判为透明。
+该合并由「主体保护」开关控制，关闭时即便连了 mask 也不采纳。
 典型场景：黑底光效中人物穿黑衣 → 纯 Unmult 会让黑衣半透明，
 接入主体 mask 后黑衣区域强制保留为不透明。
 
@@ -96,14 +97,26 @@ class RuiUnmult:
                 "黑点": ("FLOAT", {
                     "default": 0.0, "min": 0.0, "max": 0.5, "step": 0.01,
                     "display": "slider",
-                    "tooltip": "黑点（主体保护）：低于此值的 alpha 强制归零。\n"
+                    "tooltip": "低于此值的 alpha 强制归零。\n"
                                "调高可清除背景残留噪点，但过高会丢失边缘细节。"
                 }),
                 "白点": ("FLOAT", {
                     "default": 1.0, "min": 0.3, "max": 1.0, "step": 0.01,
                     "display": "slider",
-                    "tooltip": "白点（主体保护）：高于此值的 alpha 强制归一。\n"
+                    "tooltip": "高于此值的 alpha 强制归一。\n"
                                "调低可让主体更实、减少半透明损失，但过低会让边缘硬化。"
+                }),
+                "主体保护": ("BOOLEAN", {
+                    "default": True,
+                    "label_on": "启用",
+                    "label_off": "关闭",
+                    "tooltip": "是否采纳下方接入的 subject_mask。\n\n"
+                               "启用：alpha 取 max(unmult 结果, subject_mask)，\n"
+                               "  主体区域强制不透明，光效边缘仍保留半透明。\n"
+                               "  黑底素材里的黑衣、黑发全靠它保住。\n\n"
+                               "关闭：即便已经连了 subject_mask 也完全不采纳，\n"
+                               "  等同于纯 Unmult。想对比「有无 AI 介入」的差别时，\n"
+                               "  拨这个开关即可，不必拔线。"
                 }),
             },
             "optional": {
@@ -114,7 +127,7 @@ class RuiUnmult:
                                "主体内部强制不透明，光效边缘保留半透明。\n\n"
                                "典型场景：黑底光效中人物穿黑衣 →\n"
                                "纯 Unmult 会让黑衣半透明，接入主体 mask 后黑衣保留。\n\n"
-                               "不连接时等同于纯 Unmult，无 AI 介入。"
+                               "不连接、或上方「主体保护」关闭时，等同于纯 Unmult，无 AI 介入。"
                 }),
             },
         }
@@ -129,7 +142,11 @@ class RuiUnmult:
         bg_color = kwargs.get("bg_color", "#000000")
         alpha_low = kwargs.get("黑点", kwargs.get("alpha_low", 0.0))
         alpha_high = kwargs.get("白点", kwargs.get("alpha_high", 1.0))
+        # 主体保护开关：关闭时彻底忽略 subject_mask，哪怕上游已经连线
+        use_subject = kwargs.get("主体保护", kwargs.get("use_subject_mask", True))
         subject_mask_tensor = kwargs.get("subject_mask", None)
+        if not use_subject:
+            subject_mask_tensor = None
 
         bg_rgb = _hex_to_rgb01(bg_color)
 
