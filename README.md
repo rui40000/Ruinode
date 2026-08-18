@@ -1313,6 +1313,35 @@ ComfyUI 的预览区不渲染透明，看到黑底是正常现象，不代表 al
 
 **示例工作流**: `example_workflow/透明视频转PNG序列帧.json`
 
+**关于节点内视频预览被裁切**:
+如果节点下方的视频预览只显示画面的一部分（按原始像素尺寸渲染、超出部分被切掉），
+根因**不在本节点**，而是 `comfyui-art-venture` 插件的一处全局 CSS 误伤。
+
+它在 `web/upload.js` 里为自家的 `LoadVideoFromUrl` 注入了这条规则：
+
+```css
+.comfy-img-preview video {
+  width:  var(--comfy-img-preview-width);
+  height: var(--comfy-img-preview-height);
+}
+```
+
+选择器是全局的，会盖掉 ComfyUI 官方的 `width:100%; height:100%`；而这两个 CSS 变量
+只在 art-venture 自家节点的 DOM 上定义，其它节点上取到空值 —— 变量为空时整条声明失效，
+`<video>` 退回固有尺寸（例如 640×640）撑破容器，容器 `overflow:hidden` 于是把画面裁掉。
+
+本仓库通过前端扩展 `web/rui_video_preview_fit.js` 修正，注入两条规则：
+
+1. **本节点专属**：`.comfy-img-preview.rui-video-fit video` 强制 `100% + object-fit:contain`，
+   容器标记由拦截 `node.videoContainer` 赋值时打上，必定生效
+2. **全局兜底**：给那两个变量补上 `100%` 的回退值 —— 变量有值时行为完全不变
+   （art-venture 自己的节点不受影响），仅在变量为空这种本就失效的情况下恢复官方行为
+
+实测（640×640 视频、347px 宽容器）：修复前 video 渲染为 640×640 溢出被裁；
+修复后为 347×347 完整显示。
+
+> 该修复随 `WEB_DIRECTORY` 加载，**需要重启 ComfyUI 后端并刷新浏览器**才会生效。
+
 本项目遵循开源协议，欢迎使用和贡献。
 
 ---
