@@ -9,6 +9,11 @@
 其中 B 为已知背景色。通过各通道与背景色的差异反推 α 和前景色 F。
 支持任意背景色（黑/白/绿幕/自定义），纯数学变换，无模型推理。
 
+AI 主体保护（可选）：接入 BiRefNet / FeyNobg 等抠图节点输出的 subject_mask，
+用 max(unmult_α, subject_mask) 合并，防止主体中与背景色相近的区域被误判为透明。
+典型场景：黑底光效中人物穿黑衣 → 纯 Unmult 会让黑衣半透明，
+接入主体 mask 后黑衣区域强制保留为不透明。
+
 支持批量输入（序列帧/视频帧），逐帧处理后堆叠输出。
 """
 
@@ -31,14 +36,16 @@ def _hex_to_rgb01(hex_str: str) -> tuple:
 
 def _unmult_frame(rgb: np.ndarray, bg_color: tuple,
                   alpha_low: float, alpha_high: float,
+                  subject_mask: np.ndarray = None,
                   epsilon: float = 1e-6) -> tuple:
-    """对单帧图像执行 Unmult 去底。
+    """对单帧图像执行 Unmult 去底，可选主体保护。
 
     参数:
         rgb: float32 [H,W,3] 值域 [0,1]
         bg_color: (R,G,B) 值域 [0,1]
         alpha_low: 黑点（低于此值的 alpha 映射为 0）
         alpha_high: 白点（高于此值的 alpha 映射为 1）
+        subject_mask: float32 [H,W] 值域 [0,1]，主体区域为 1
 
     返回:
         (foreground [H,W,3], alpha [H,W])  均 float32
@@ -56,6 +63,9 @@ def _unmult_frame(rgb: np.ndarray, bg_color: tuple,
         span = max(alpha_high - alpha_low, epsilon)
         alpha = np.clip((alpha - alpha_low) / span, 0.0, 1.0)
 
+    if subject_mask is not None:
+        alpha = np.maximum(alpha, subject_mask)
+
     alpha_safe = np.maximum(alpha, epsilon)
     foreground = bg + diff / alpha_safe[..., np.newaxis]
     foreground = np.clip(foreground, 0.0, 1.0)
@@ -67,7 +77,8 @@ def _unmult_frame(rgb: np.ndarray, bg_color: tuple,
 
 
 class RuiUnmult:
-    """半透明抠图（Unmult）：指定背景色，纯数学去底，输出 RGBA 图像 + Alpha 蒙版。"""
+    """半透明抠图（Unmult）：指定背景色，纯数学去底，输出 RGBA 图像 + Alpha 蒙版。
+    可选接入 AI 主体保护 mask，防止主体中近似背景色的区域被误判为透明。"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -82,9 +93,6 @@ class RuiUnmult:
                                "常用值：#000000（黑底）、#FFFFFF（白底）、"
                                "#00FF00（绿幕）、#FF00FF（品红）。"
                 }),
-                # 用中文参数名 + display:slider，界面上就是「黑点／白点」两条滑块，
-                # 与 LayerStyle 的 BiRefNet Ultra 观感一致。
-                # 中文名不能直接做函数形参，故 unmult() 统一用 **kwargs 接收。
                 "黑点": ("FLOAT", {
                     "default": 0.0, "min": 0.0, "max": 0.5, "step": 0.01,
                     "display": "slider",
@@ -98,6 +106,17 @@ class RuiUnmult:
                                "调低可让主体更实、减少半透明损失，但过低会让边缘硬化。"
                 }),
             },
+            "optional": {
+                "subject_mask": ("MASK", {
+                    "tooltip": "AI 主体保护遮罩（可选）。\n"
+                               "接入 FeyNobg / Lucida / BiRefNet 等抠图节点输出的 alpha，\n"
+                               "节点会执行 max(unmult_α, subject_mask) 合并：\n"
+                               "主体内部强制不透明，光效边缘保留半透明。\n\n"
+                               "典型场景：黑底光效中人物穿黑衣 →\n"
+                               "纯 Unmult 会让黑衣半透明，接入主体 mask 后黑衣保留。\n\n"
+                               "不连接时等同于纯 Unmult，无 AI 介入。"
+                }),
+            },
         }
 
     RETURN_TYPES = ("IMAGE", "MASK")
@@ -106,12 +125,11 @@ class RuiUnmult:
     CATEGORY = "Rui-Node🐶/抠图✂️"
 
     def unmult(self, **kwargs):
-        # 「黑点／白点」是中文参数名，无法直接写进函数签名，统一从 kwargs 取。
-        # 同时兼容旧的英文名，避免早先保存的工作流失配。
         image = kwargs.get("image")
         bg_color = kwargs.get("bg_color", "#000000")
         alpha_low = kwargs.get("黑点", kwargs.get("alpha_low", 0.0))
         alpha_high = kwargs.get("白点", kwargs.get("alpha_high", 1.0))
+        subject_mask_tensor = kwargs.get("subject_mask", None)
 
         bg_rgb = _hex_to_rgb01(bg_color)
 
@@ -126,8 +144,22 @@ class RuiUnmult:
 
         for i in range(B):
             frame = image[i].cpu().numpy().astype(np.float32)
+
+            smask = None
+            if subject_mask_tensor is not None:
+                if subject_mask_tensor.dim() == 2:
+                    raw = subject_mask_tensor.cpu().numpy().astype(np.float32)
+                else:
+                    idx = min(i, subject_mask_tensor.shape[0] - 1)
+                    raw = subject_mask_tensor[idx].cpu().numpy().astype(np.float32)
+                if raw.shape[0] != H or raw.shape[1] != W:
+                    import cv2
+                    raw = cv2.resize(raw, (W, H), interpolation=cv2.INTER_LINEAR)
+                smask = np.clip(raw, 0.0, 1.0)
+
             fg, a = _unmult_frame(frame, bg_rgb,
-                                  float(alpha_low), float(alpha_high))
+                                  float(alpha_low), float(alpha_high),
+                                  subject_mask=smask)
             rgba = np.concatenate([fg, a[..., np.newaxis]], axis=-1)
             fg_list.append(torch.from_numpy(rgba))
             alpha_list.append(torch.from_numpy(a))
