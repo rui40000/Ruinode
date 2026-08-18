@@ -1,0 +1,222 @@
+{
+  "id": "rui-load-video-alpha-demo",
+  "revision": 0,
+  "last_node_id": 9,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "RuiLoadVideoAlpha",
+      "pos": [
+        -1000,
+        200
+      ],
+      "size": [
+        400,
+        300
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "rgba_image",
+          "type": "IMAGE",
+          "links": [
+            1,
+            2
+          ],
+          "slot_index": 0
+        },
+        {
+          "name": "alpha",
+          "type": "MASK",
+          "links": [
+            3
+          ],
+          "slot_index": 1
+        },
+        {
+          "name": "rgb_image",
+          "type": "IMAGE",
+          "links": null,
+          "slot_index": 2
+        },
+        {
+          "name": "帧数",
+          "type": "INT",
+          "links": null,
+          "slot_index": 3
+        },
+        {
+          "name": "帧率",
+          "type": "FLOAT",
+          "links": null,
+          "slot_index": 4
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "RuiLoadVideoAlpha"
+      },
+      "title": "① 加载透明视频（保留 alpha）",
+      "widgets_values": [
+        "HolopixAI_00001.webm",
+        0.0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        "自动",
+        ""
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 2,
+      "type": "SaveImage",
+      "pos": [
+        -540,
+        200
+      ],
+      "size": [
+        420,
+        400
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveImage"
+      },
+      "title": "② 保存 PNG 序列帧（带透明通道）",
+      "widgets_values": [
+        "透明序列帧/frame"
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 3,
+      "type": "PreviewImage",
+      "pos": [
+        -540,
+        640
+      ],
+      "size": [
+        420,
+        400
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 2
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "PreviewImage"
+      },
+      "title": "③ 预览 RGBA（预览区黑底是正常现象）",
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 4,
+      "type": "RuiMaskPreview",
+      "pos": [
+        -540,
+        1080
+      ],
+      "size": [
+        420,
+        400
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "RuiMaskPreview"
+      },
+      "title": "④ 透明通道预览（白=不透明 黑=透明）",
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 9,
+      "type": "Note",
+      "pos": [
+        -1000,
+        560
+      ],
+      "size": [
+        400,
+        340
+      ],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "title": "说明",
+      "widgets_values": [
+        "为什么普通加载视频节点会丢透明通道\n─────────────────────────────\n带 alpha 的 WebM 并不把透明度放在主视频流里。\n主流仍是 yuv420p，alpha 被单独压成第二路，藏在\nMatroska 的 BlockAdditional 边带中，容器上只留\n一条 alpha_mode=1 的元数据作记号。\n\nffmpeg 内置的 vp9/vp8 解码器不读这条边带，只有\nlibvpx-vp9 / libvpx 会。VideoHelperSuite 等节点\n走的是默认解码器，所以每帧 alpha 恒为 255。\n\n本节点会自动探测 alpha_mode 并换用 libvpx 解码。\n若仍然丢失，把「解码器」切到「强制 libvpx」。\n\n关于预览\n─────────────────────────────\nComfyUI 预览区不渲染透明，看到黑底属正常现象。\n以④的遮罩预览为准，或直接看存出的 PNG 文件。\n\n输出的 PNG 位于 output/透明序列帧/ 下，\n为 RGBA 模式，可直接导入 Unity / Godot / AE。"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      2,
+      0,
+      "IMAGE"
+    ],
+    [
+      2,
+      1,
+      0,
+      3,
+      0,
+      "IMAGE"
+    ],
+    [
+      3,
+      1,
+      1,
+      4,
+      0,
+      "MASK"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

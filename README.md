@@ -20,6 +20,7 @@ Rui-Node🐶 是一个功能丰富的 ComfyUI 节点集合，提供图像处理�
 - [像素化 / Pixelate](#24-像素化--pixelate)
 - [八方向序列拆分 / 8-Direction Sprite Split](#25-八方向序列拆分--8-direction-sprite-split)
 - [半透明抠图 / Unmult Matting](#27-半透明抠图--unmult-matting)
+- [加载透明视频 / Load Video (Alpha)](#28-加载透明视频--load-video-alpha)
 
 ### 📁 文件存储与加载类
 - [按路径加载图像 / Load Image By Path](#3-按路径加载图像--load-image-by-path)
@@ -1255,6 +1256,62 @@ Unity/Godot 归一化 pivot（左下为原点）：(0.5411, 0.0699)
 Rui-Node🐶 致力于为 ComfyUI 用户提供实用、高效的节点工具集。🐶 是我们的项目标志，代表着忠诚、友好和可靠。
 
 ## 📄 许可证
+
+---
+
+### 28. 加载透明视频 / Load Video (Alpha)
+
+**分类**: `Rui-Node🐶/视频🎬`
+
+**功能描述**:
+从带透明通道的视频中解出 **RGBA 序列帧**，alpha 不丢失。用来解决一个很常见、
+但排查起来相当隐蔽的问题：**带 alpha 的 WebM 用常规加载视频节点读进来，透明通道没了。**
+
+**为什么会丢——根因**:
+带 alpha 的 WebM（VP8/VP9）并不把透明度放在主视频流里。主流仍然是 `yuv420p`，
+alpha 被单独压成第二路，藏在 Matroska 的 **BlockAdditional 边带**中，容器上只留
+一条 `alpha_mode=1` 的元数据作记号。
+
+ffmpeg 内置的 `vp9` / `vp8` 解码器**根本不读这条边带**，只有 `libvpx-vp9` / `libvpx`
+才会。VideoHelperSuite 等常见加载节点走的是默认解码器，于是拿到的每一帧 alpha 恒为 255。
+
+实测同一个文件的三条路径：
+
+| 解码路径 | alpha 结果 |
+|---|---|
+| PyAV 默认（解码器 `vp9`） | 全 255，**丢失** |
+| ffmpeg 默认 | 全 255，**丢失** |
+| 显式 `-c:v libvpx-vp9` | min=0 max=255，全透明 87.2%、半透明 2.0%，**完整** |
+
+本节点显式指定 libvpx 解码器，并以 rgba 原始像素流读回，因此连半透明边缘也一并保留。
+对 MOV/qtrle、ProRes 4444 等本身带 alpha 通道的格式同样适用。
+
+**输入参数**:
+- `video`: 从 input 目录选择视频文件
+- `强制帧率` (FLOAT): 按指定帧率重采样，0=保持原始帧率
+- `帧数上限` (INT): 最多读取多少帧，0=读完整段（达到上限立即中止解码）
+- `跳过前N帧` (INT): 丢弃开头若干帧
+- `间隔` (INT): 每隔几帧取一帧，1=每帧都要
+- `自定义宽度` / `自定义高度` (INT): 0=保持原始；只填一边时另一边按比例换算
+- `解码器`: `自动`（探测到 alpha_mode=1 的 VP8/VP9 时自动换 libvpx）/ `强制 libvpx（保 alpha）` / `默认解码器`
+- `视频路径` (STRING, 可选): 绝对路径，填写后优先于下拉选择
+
+**输出**:
+- `rgba_image` (IMAGE): 4 通道 RGBA 序列帧
+- `alpha` (MASK): 透明通道
+- `rgb_image` (IMAGE): 3 通道，供只吃 3 通道的下游节点使用
+- `帧数` (INT) / `帧率` (FLOAT)
+
+**存成带透明通道的 PNG 序列帧**:
+`rgba_image` 直接接 ComfyUI **原生「保存图像」节点**即可。原生节点的像素处理是
+`Image.fromarray(...)`，4 通道数组会被识别成 RGBA 模式，存出的 PNG 完整保留 alpha——
+不需要额外的保存节点。实测 33 帧全部为 RGBA 模式，与内存中的 alpha 逐像素零误差。
+
+**关于预览发黑**:
+ComfyUI 的预览区不渲染透明，看到黑底是正常现象，不代表 alpha 丢了。
+判断是否成功以 `alpha` 输出接遮罩预览为准，或直接看存出的 PNG 文件。
+
+**示例工作流**: `example_workflow/透明视频转PNG序列帧.json`
 
 本项目遵循开源协议，欢迎使用和贡献。
 
