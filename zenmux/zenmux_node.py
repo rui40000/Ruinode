@@ -23,7 +23,9 @@ import base64
 import io
 import json
 import os
+import random
 import re
+import time
 
 import numpy as np
 import requests
@@ -67,6 +69,41 @@ def _build_chat_url(base_url: str) -> str:
     if s.lower().endswith('/chat/completions'):
         return s
     return s + '/chat/completions'
+
+
+# ── 网络层自动重连 ──
+# 可重试的 HTTP 状态：限流与服务端临时故障，换个时间再来往往就好了。
+# 4xx（除 408/429）是参数或鉴权问题，重试纯属浪费，不列入。
+_RETRIABLE_STATUS = {408, 425, 429, 500, 502, 503, 504, 520, 521, 522, 523, 524}
+
+# 这几类异常的共同点是「没拿到完整响应」，重连通常能恢复：
+#   ConnectionError —— 含 SSLError/SSLEOFError（握手被打断）、连接被重置
+#   Timeout         —— 连接超时与读超时
+#   ChunkedEncodingError / JSONDecodeError —— 响应体传到一半断了
+_RETRIABLE_EXC = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    json.JSONDecodeError,
+)
+
+
+def _retry_wait(attempt: int, resp=None) -> float:
+    """指数退避 + 随机抖动，返回本次该等几秒。attempt 从 0 起。
+
+    抖动不是可有可无的装饰：一条工作流里常有多个 API 节点同时失败，
+    没有抖动它们会在同一毫秒一起重连，把刚缓过来的服务端再打垮一次。
+    服务端明确给了 Retry-After 时以它为准。
+    """
+    if resp is not None:
+        ra = resp.headers.get("Retry-After")
+        if ra:
+            try:
+                return max(0.5, min(float(ra), 60.0))
+            except (TypeError, ValueError):
+                pass
+    base = min(2.0 ** attempt, 16.0)          # 1s → 2s → 4s → 8s → 16s 封顶
+    return round(base * random.uniform(0.75, 1.25), 2)
 
 
 def _build_proxy_url(raw_proxy: str) -> str:
@@ -229,6 +266,30 @@ class ZenMuxNode:
                                "例如 127.0.0.1:7890。留空表示直连。"
                 }),
                 # usage_stats 里人民币换算用的汇率，可按当日牌价自行调整
+                "max_retries": ("INT", {
+                    "default": 3,
+                    "min": 0,
+                    "max": 10,
+                    "step": 1,
+                    "tooltip": "网络失败后的自动重连次数，0 表示不重连。\n\n"
+                               "会触发重连的情况：SSL 握手被打断\n"
+                               "（SSLEOFError）、连接被重置、读超时、响应体\n"
+                               "截断，以及 429 限流和 5xx 服务端临时故障。\n\n"
+                               "不会重连的情况：参数类 400、鉴权类 401/403 ——\n"
+                               "这些重试多少次都是同样的结果。\n\n"
+                               "退避按 1s→2s→4s 指数增长并带随机抖动，避免\n"
+                               "多个节点同时重连再次压垮服务端；服务端给了\n"
+                               "Retry-After 时以它为准。"
+                }),
+                "timeout": ("INT", {
+                    "default": 180,
+                    "min": 10,
+                    "max": 1800,
+                    "step": 10,
+                    "tooltip": "单次请求的超时秒数。\n"
+                               "长文本或多图推理较慢时可调大。\n"
+                               "超时会计入上面的重连次数。"
+                }),
                 "usd_to_cny": ("FLOAT", {
                     "default": 7.2,
                     "min": 0.1,
@@ -334,6 +395,8 @@ class ZenMuxNode:
         base_url=DEFAULT_BASE_URL,
         proxy_url="",
         usd_to_cny=7.2,
+        max_retries=3,
+        timeout=180,
     ):
         # ---- 1. 从下拉标签解析真实 model id ----
         model_id = label_to_model_id(model) or DEFAULT_MODEL_ID
@@ -402,56 +465,92 @@ class ZenMuxNode:
 
         resp = None
         dropped = []  # 记录被剔除/改名的参数，供最终报错时提示
-        try:
-            # 自适应参数重试：ZenMux 聚合的部分模型弃用/不支持某些采样参数
-            # （claude-sonnet-5 弃用 temperature、gpt-5 reasoning 系要 max_completion_tokens
-            #  等），命中即剔除/改名后重试，正常请求不受影响、零额外开销。
-            for _ in range(len(_ADJUSTABLE_PARAMS) + 2):
-                resp = requests.post(chat_url, headers=headers, json=payload,
-                                     proxies=proxies, timeout=180)
-                if resp.status_code == 400:
-                    fix = _diagnose_param(resp, payload)
-                    if fix:
-                        action, param = fix
-                        if action == "rename_mct":
-                            payload["max_completion_tokens"] = payload.pop("max_tokens")
-                            dropped.append("max_tokens→max_completion_tokens")
-                            print("[Rui-Node] ZenMux: 该模型要求 max_completion_tokens，"
-                                  "已改名重试")
-                        else:
-                            payload.pop(param, None)
-                            dropped.append(param)
-                            print(f"[Rui-Node] ZenMux: 该模型不支持参数 '{param}'，"
-                                  "已剔除后重试")
-                        continue
-                break
-            resp.raise_for_status()
-            data = resp.json()
-            if data.get("choices"):
-                msg = data["choices"][0].get("message", {})
-                content = msg.get("content", "")
-                if isinstance(content, list):  # 少数模型返回分段内容
-                    content = "".join(
-                        seg.get("text", "") for seg in content if isinstance(seg, dict)
-                    )
-                stats = self._build_usage_stats(model_id, data.get("usage"),
-                                                usd_to_cny, content or "")
-                return (content or "", model_id, stats)
-            # 格式异常：无正文可计字数，但 usage 仍尽量取真实值
-            stats = self._build_usage_stats(model_id, data.get("usage"), usd_to_cny)
-            return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)[:800]}",
-                    model_id, stats)
-        except requests.exceptions.ConnectionError as e:
-            return (f"连接失败（请检查网络/代理）: {e}", model_id, zero_stats)
-        except requests.exceptions.Timeout:
-            return ("请求超时（180s），请检查网络或 ZenMux 服务状态。", model_id, zero_stats)
-        except requests.exceptions.HTTPError:
-            code = resp.status_code if resp is not None else "?"
-            body = resp.text[:600] if resp is not None else ""
-            hint = f"（已尝试剔除参数 {', '.join(dropped)} 仍失败）" if (code == 400 and dropped) else ""
-            return (f"HTTP 错误 {code}: {body}{hint}", model_id, zero_stats)
-        except Exception as e:
-            return (f"请求异常: {type(e).__name__}: {e}", model_id, zero_stats)
+        last_net_err = ""
+        total_tries = max(1, int(max_retries) + 1)
+
+        for attempt in range(total_tries):
+            try:
+                # 自适应参数重试：ZenMux 聚合的部分模型弃用/不支持某些采样参数
+                # （claude-sonnet-5 弃用 temperature、gpt-5 reasoning 系要 max_completion_tokens
+                #  等），命中即剔除/改名后重试，正常请求不受影响、零额外开销。
+                # 这层不消耗网络重连次数——两者是性质不同的问题。
+                for _ in range(len(_ADJUSTABLE_PARAMS) + 2):
+                    resp = requests.post(chat_url, headers=headers, json=payload,
+                                         proxies=proxies, timeout=timeout)
+                    if resp.status_code == 400:
+                        fix = _diagnose_param(resp, payload)
+                        if fix:
+                            action, param = fix
+                            if action == "rename_mct":
+                                payload["max_completion_tokens"] = payload.pop("max_tokens")
+                                dropped.append("max_tokens→max_completion_tokens")
+                                print("[Rui-Node] ZenMux: 该模型要求 max_completion_tokens，"
+                                      "已改名重试")
+                            else:
+                                payload.pop(param, None)
+                                dropped.append(param)
+                                print(f"[Rui-Node] ZenMux: 该模型不支持参数 '{param}'，"
+                                      "已剔除后重试")
+                            continue
+                    break
+
+                # 限流 / 服务端临时故障：计入网络重连
+                if resp.status_code in _RETRIABLE_STATUS and attempt < total_tries - 1:
+                    wait = _retry_wait(attempt, resp)
+                    print(f"[Rui-Node] ZenMux: 服务端返回 {resp.status_code}，"
+                          f"{wait:.1f}s 后重试"
+                          f"（第 {attempt + 1}/{total_tries - 1} 次重连）")
+                    time.sleep(wait)
+                    continue
+
+                resp.raise_for_status()
+                data = resp.json()
+                if data.get("choices"):
+                    msg = data["choices"][0].get("message", {})
+                    content = msg.get("content", "")
+                    if isinstance(content, list):  # 少数模型返回分段内容
+                        content = "".join(
+                            seg.get("text", "") for seg in content if isinstance(seg, dict)
+                        )
+                    stats = self._build_usage_stats(model_id, data.get("usage"),
+                                                    usd_to_cny, content or "")
+                    if attempt:
+                        print(f"[Rui-Node] ZenMux: 第 {attempt} 次重连后成功")
+                    return (content or "", model_id, stats)
+                # 格式异常：无正文可计字数，但 usage 仍尽量取真实值
+                stats = self._build_usage_stats(model_id, data.get("usage"), usd_to_cny)
+                return (f"API 返回格式异常: {json.dumps(data, ensure_ascii=False)[:800]}",
+                        model_id, stats)
+
+            except _RETRIABLE_EXC as e:
+                last_net_err = f"{type(e).__name__}: {e}"
+                if attempt < total_tries - 1:
+                    wait = _retry_wait(attempt)
+                    print(f"[Rui-Node] ZenMux: 连接失败（{type(e).__name__}），"
+                          f"{wait:.1f}s 后重连"
+                          f"（第 {attempt + 1}/{total_tries - 1} 次）")
+                    time.sleep(wait)
+                    continue
+                tail = (f"（已自动重连 {max_retries} 次仍失败；"
+                        f"可调大 max_retries，或检查网络/代理）"
+                        if max_retries else "（max_retries=0，未重连）")
+                return (f"连接失败（请检查网络/代理）: {last_net_err}{tail}",
+                        model_id, zero_stats)
+
+            except requests.exceptions.HTTPError:
+                # 参数与鉴权类错误重试无意义，直接报错
+                code = resp.status_code if resp is not None else "?"
+                body = resp.text[:600] if resp is not None else ""
+                hint = f"（已尝试剔除参数 {', '.join(dropped)} 仍失败）" if (code == 400 and dropped) else ""
+                if attempt:      # 重连过仍是这个状态，明说，省得用户以为没重试
+                    hint += f"（已自动重连 {attempt} 次仍返回该状态）"
+                return (f"HTTP 错误 {code}: {body}{hint}", model_id, zero_stats)
+
+            except Exception as e:
+                return (f"请求异常: {type(e).__name__}: {e}", model_id, zero_stats)
+
+        # 循环内必定 return；这条仅作兜底，避免异常路径返回 None
+        return ("请求未能完成，请重试或检查服务状态。", model_id, zero_stats)
 
 
 # ────────── ComfyUI 注册 ──────────
